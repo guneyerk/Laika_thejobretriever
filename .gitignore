@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Office lock and temp files
+~$*
+*.tmp
+.Job Tracker.tmp.xlsx
+
+# Never commit personal job-search data
+Laika Job Search/
+.laika/
+Job Tracker.xlsx
+*.xlsx

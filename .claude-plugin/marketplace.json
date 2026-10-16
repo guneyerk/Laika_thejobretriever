@@ -1,0 +1,14 @@
+{
+  "name": "laika-the-job-retriever",
+  "description": "Laika, The Job Retriever - a personal job-search agent for Claude Code",
+  "owner": {
+    "name": "guneyerk"
+  },
+  "plugins": [
+    {
+      "name": "laika",
+      "source": "./plugins/laika",
+      "description": "Fetches new job openings from LinkedIn and other job boards, rates them against your CV, keeps an Excel tracker and learns from what you apply to and ignore."
+    }
+  ]
+}
