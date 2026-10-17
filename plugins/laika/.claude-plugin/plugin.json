@@ -1,7 +1,7 @@
 {
   "name": "laika",
   "displayName": "Laika, The Job Retriever",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Personal job-search agent: fetches new openings from LinkedIn and other job boards, rates each one against your CV, keeps an Excel tracker with no duplicates, and learns from what you apply to and ignore.",
   "author": {
     "name": "guneyerk",

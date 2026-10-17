@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0 - 2026-10-17
+
+- **Personal touch:** before drafting a cover letter, Laika asks one or two quick questions only the user
+  can answer: why this role, and a specific moment that fits it.
+  - Lasting details (e.g. a relocation plan) are saved under "Personal details you've shared" in the style
+    file for later letters.
+- **Naturalness check:** `letter-build` flags patterns that make a letter read as generic or
+  machine-written:
+  - stock phrases ("I am writing to express", "passionate about", "delve")
+  - very even sentence or paragraph lengths
+  - repeated sentence openings and stock transitions
+  - too many lists of three
+  - long dashes and exclamation marks
+
+  Laika rewrites them in the user's own words. It never uses tricks aimed at AI detectors.
+- **Learning from your edits:** new `letter-diff` command. It compares the user's edited Word letter with
+  Laika's draft and shows every changed sentence, so Laika can turn the patterns into style rules.
+  - `--update-json` keeps the user's text for rebuilds, with a backup of the draft.
+
 ## 1.2.0 - 2026-10-17
 
 - **Cover letters:** after rating roles, Laika offers cover letters together with tailored CVs

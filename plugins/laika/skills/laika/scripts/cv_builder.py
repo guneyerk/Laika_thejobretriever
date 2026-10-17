@@ -528,6 +528,63 @@ def build(content_path: Path, out_base: Path, pdf: str = "auto") -> int:
     return 0
 
 
+# ---------- naturalness check (cover letters) ----------
+# Phrases that make a letter read as generic or machine-written. Advisory only: Laika rewrites them in the
+# user's own words. This is about sounding like the user, never about tricking AI detectors.
+STOCK_PHRASES = [
+    "i am writing to express", "i am writing to apply", "i am excited to apply", "i am thrilled", "delve",
+    "a testament to", "tapestry", "in today's fast-paced", "ever-evolving", "ever-changing landscape",
+    "navigate the complexities", "seamless", "leverage my", "synergy", "synergies", "passionate about",
+    "dynamic environment", "unwavering", "honed my", "i believe i would be a great fit", "perfect fit",
+    "look no further", "in conclusion", "it is worth noting", "plays a pivotal role", "pivotal", "game-changer",
+    "cutting-edge", "embark on", "i am confident that my", "uniquely positioned", "align perfectly",
+]
+STOCK_OPENERS = ("additionally", "furthermore", "moreover", "ultimately", "overall", "in addition", "consequently",
+                 "notably", "importantly")
+
+
+def sentences(text: str) -> list[str]:
+    return [x for x in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])", text.strip()) if x]
+
+
+def naturalness_notes(paragraphs: list[str]) -> list[str]:
+    notes = []
+    text = " ".join(paragraphs)
+    low = text.lower()
+    found = [ph for ph in STOCK_PHRASES if ph in low]
+    if found:
+        notes.append("Stock phrases: " + ", ".join(f'"{x}"' for x in found) + " - say it the way the user would.")
+    sents = [x for para in paragraphs for x in sentences(para)]
+    lengths = [len(x.split()) for x in sents]
+    if len(lengths) >= 5:
+        mean = sum(lengths) / len(lengths)
+        sd = (sum((n - mean) ** 2 for n in lengths) / len(lengths)) ** 0.5
+        if mean and sd / mean < 0.3:
+            notes.append(f"Sentence lengths are very even (mostly about {round(mean)} words) - mix in a short sentence "
+                         "and a longer one.")
+    words = [len(x.split()) for x in paragraphs]
+    if len(words) >= 3 and min(words) and max(words) / min(words) < 1.25:
+        notes.append("The paragraphs are all about the same length - vary them.")
+    firsts = [re.sub(r"[^\w']", "", x.split()[0]).lower() for x in sents if x.split()]
+    if len(firsts) >= 6:
+        top = max(set(firsts), key=firsts.count)
+        if firsts.count(top) / len(firsts) > 0.4:
+            notes.append(f'{firsts.count(top)} of {len(firsts)} sentences start with "{top}" - vary the openings.')
+    starters = sorted({x.split(",")[0] for x in sents if x.lower().startswith(STOCK_OPENERS)})
+    if starters:
+        notes.append("Stock transitions at sentence starts: " + ", ".join(f'"{x}"' for x in starters) + ".")
+    triplets = re.findall(r"\b[\w'-]+(?: [\w'-]+){0,2}, [\w'-]+(?: [\w'-]+){0,2},? and [\w'-]+", text)
+    if len(triplets) >= 3:
+        notes.append(f"{len(triplets)} lists of three - keep the one that matters most, and use pairs or single items "
+                     "elsewhere.")
+    dashes = text.count("\u2014") + text.count(" \u2013 ")
+    if dashes > 1:
+        notes.append(f"{dashes} long dashes - most people use commas or full stops instead.")
+    if text.count("!") > 1:
+        notes.append("Several exclamation marks - keep at most one.")
+    return notes
+
+
 def build_letter(content_path: Path, out_base: Path, pdf: str = "auto") -> int:
     letter = load_content(content_path)
     if letter is None:
@@ -558,6 +615,13 @@ def build_letter(content_path: Path, out_base: Path, pdf: str = "auto") -> int:
         notes.append("Bold text in the body - letters normally have none.")
     for n in notes:
         print("Note: " + n)
+    natural = naturalness_notes(paras)
+    if natural:
+        print(f"Naturalness check: {len(natural)} thing(s) to rewrite in the user's own words:")
+        for n in natural:
+            print("  " + n)
+    else:
+        print("Naturalness check: no stock or machine-like patterns found.")
     if problems:
         print("RULE VIOLATIONS:")
         for p in problems:

@@ -37,7 +37,7 @@ try:  # Windows consoles default to cp1252; job data is full of Turkish/other ch
 except Exception:
     pass
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 GLOBAL_CONFIG = Path.home() / ".laika" / "config.json"
 PROFILE_FILE = ".laika-profile.json"   # put this file in a folder to give that folder its own Laika profile
 
@@ -1546,6 +1546,84 @@ def record_document(m: Path, folder: Path, out_base: Path, key: str) -> None:
     print(f"Recorded on {j['id']} ({j['title']} - {j['company']}); Excel {'updated' if excel_ok else 'NOT updated (file open)'}.")
 
 
+CLOSING_RE = re.compile(r"^((kind|best|warm|warmest|with best)\s+regards|regards|sincerely|yours (sincerely|faithfully|truly)|"
+                        r"many thanks|thank you|best wishes|with thanks)\b", re.I)
+
+
+def docx_paragraphs(path: Path) -> list[str]:
+    import docx
+    return [p.text.strip() for p in docx.Document(str(path)).paragraphs if p.text.strip()]
+
+
+def cmd_letter_diff(a):
+    """Compare the user's edited Word letter with Laika's letter.json, so Laika can learn from the edits."""
+    get_master()
+    src = Path(a.target).expanduser()
+    folder = src if src.is_dir() else src.parent
+    content = folder / "letter.json"
+    if not content.is_file():
+        die(f"letter.json not found in {folder}")
+    letter = json.loads(content.read_text(encoding="utf-8-sig"))
+    if a.file:
+        edited = Path(a.file).expanduser()
+    else:
+        docs = [x for x in folder.glob("*.docx") if not x.name.startswith("~$")]
+        edited = max(docs, key=lambda x: x.stat().st_mtime) if docs else None
+    if not edited or not edited.is_file():
+        die(f"No edited .docx found in {folder} - pass it with --file")
+    try:
+        paras = docx_paragraphs(edited)
+    except ImportError:
+        die("python-docx is needed to read the Word file (see `doctor`)")
+    except PermissionError:
+        die(f"{edited.name} is open in Word - save and close it, then run this again")
+    sal = (letter.get("salutation") or "").strip()
+    clo = (letter.get("closing") or "").strip()
+    s_i = next((i for i, t in enumerate(paras) if t == sal or t.lower().startswith(("dear ", "hello ", "hi "))), None)
+    c_i = next((i for i in range(len(paras) - 1, -1, -1) if paras[i] == clo or CLOSING_RE.match(paras[i])), None)
+    print(f"EDITED FILE: {edited}")
+    if s_i is None or c_i is None or c_i <= s_i:
+        print("Could not find the salutation and closing in the Word file, so the body can't be separated. Full text:")
+        print("\n\n".join(paras))
+        return
+    body = paras[s_i + 1:c_i]
+    import difflib
+    old_s = [x for para in letter.get("paragraphs") or [] for x in load_cv_builder().sentences(para)]
+    new_s = [x for para in body for x in load_cv_builder().sentences(para)]
+    changes = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(a=old_s, b=new_s, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        changes.append((tag, old_s[i1:i2], new_s[j1:j2]))
+    head_changed = [(k, letter.get(k), v) for k, v in (("salutation", paras[s_i]), ("closing", paras[c_i]))
+                    if (letter.get(k) or "") != v]
+    if not changes and not head_changed and len(body) == len(letter.get("paragraphs") or []):
+        print("NO EDITS: the Word file's text matches letter.json.")
+        return
+
+    def stats(sents):
+        n = [len(x.split()) for x in sents]
+        return f"{sum(n)} words, {len(n)} sentences, {round(sum(n) / len(n), 1) if n else 0} words per sentence"
+    print(f"LAIKA'S DRAFT: {stats(old_s)} in {len(letter.get('paragraphs') or [])} paragraphs")
+    print(f"YOUR VERSION:  {stats(new_s)} in {len(body)} paragraphs")
+    for k, old, new in head_changed:
+        print(f"{k.upper()}: \"{old}\" -> \"{new}\"")
+    for tag, old, new in changes:
+        print("-" * 60)
+        for x in old:
+            print(f"- {x}")
+        for x in new:
+            print(f"+ {x}")
+    if a.update_json:
+        backup = folder / "letter.previous.json"
+        backup.write_text(content.read_text(encoding="utf-8-sig"), encoding="utf-8")
+        letter.update({"paragraphs": body, "salutation": paras[s_i], "closing": paras[c_i]})
+        content.write_text(json.dumps(letter, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("-" * 60)
+        print(f"letter.json now holds your version (Laika's draft saved as {backup.name}). Rebuild with `letter-build` to "
+              "refresh the PDF; the text is kept, manual formatting in Word is not.")
+
+
 def cmd_letter_build(a):
     m = get_master()
     src = Path(a.target).expanduser()
@@ -2457,6 +2535,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--name", help="Output file name without extension (default First_Last_Cover_Letter_<Mon><YY>)")
     s.add_argument("--pdf", choices=["auto", "libreoffice", "word", "none"], default="auto")
     s.set_defaults(func=cmd_letter_build)
+
+    s = sub.add_parser("letter-diff", help="Compare your edited Word letter with Laika's draft (to learn from your edits)")
+    s.add_argument("target", help="A cover-letter folder (or its letter.json)")
+    s.add_argument("--file", help="The edited .docx (default: the newest .docx in the folder)")
+    s.add_argument("--update-json", action="store_true", help="Save your edited text into letter.json (backup kept)")
+    s.set_defaults(func=cmd_letter_diff)
 
     s = sub.add_parser("style", help="Writing style for cover letters: show | path | add FILE... | samples")
     s.add_argument("action", choices=["show", "path", "add", "samples"])

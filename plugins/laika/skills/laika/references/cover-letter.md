@@ -37,7 +37,13 @@ One letter per role. For several roles, do them one after another.
    style's default salutation ("Dear Hiring Manager," in the default style).
 7. **Match the user's writing style** (`Writing Style/Laika Writing Style.md`), but never at the expense of
    rules 2-4.
-8. **Private by default.** Letters stay in the master folder. Laika never sends one and never applies on
+8. **Sound like the user, not like a template.** Ask for one personal touch, run the naturalness check,
+   and learn from the user's own edits (all below).
+   - Never add deliberate typos, hidden characters or other tricks aimed at AI detectors.
+   - Never promise that a letter will "pass" a detector: detectors are unreliable, and wrongly flag
+     human writing too.
+   - If a posting asks applicants not to use AI tools, point that out to the user before writing.
+9. **Private by default.** Letters stay in the master folder. Laika never sends one and never applies on
    the user's behalf.
 
 ## First letter: set up the writing style
@@ -120,16 +126,36 @@ Steps:
    no job description, read the posting first (WebFetch the link, or the browser for browser sites).
 2. Read `Writing Style/Laika Writing Style.md` and follow it, including the rules learned from feedback.
    If `letter` printed `APPLICATION FIT: NOT CHECKED`, run the application-fit check first.
-3. Plan the letter around the 2-3 things the posting cares about most, each backed by real evidence from
-   the user's CV or certificates. Don't retell the CV bullet by bullet. Explain why this role, using
-   what the posting says.
-4. Write `letter.json` in the role folder (schema below). Use today's date in the style's date format.
-5. Build: `laika letter-build "<role folder>"`. It writes `First_Last_Cover_Letter_<Mon><YY>.docx` and
-   `.pdf`, checks the rules, and links the letter on the role (the tracker's "Cover Letter" column and
-   the role card). Exit code 2 means a rule failed: fix the letter and rerun.
-6. Read the PDF and check it: one page, nothing cut off, a clean header.
-7. Deliver: give both paths (and send the PDF with SendUserFile when that tool is available). In one or
-   two lines, say what the letter emphasises, then ask for feedback.
+3. **Ask for a personal touch** before drafting, once per letter, in one message (AskUserQuestion when
+   available). Ask one or two quick questions only the user can answer:
+   - **Why this company or role?** For example, what draws them to it, or a link to their plans.
+   - **A specific moment from their experience** that fits this role's main need. Suggest 2-3 options
+     from their CV as answers; they can type their own.
+
+   Add a `Skip - use my CV` option. Don't ask again for things already under "Personal details you've
+   shared" in the style file, and skip this step if the user said "just write it".
+   - **Answers about this role** go into this letter only.
+   - **Lasting personal details** (a relocation plan, why they're changing industry) go under "Personal
+     details you've shared", so later letters can use them when relevant.
+4. Plan the letter around the 2-3 things the posting cares about most, each backed by real evidence from
+   the user's CV or certificates, plus the personal touch. Don't retell the CV bullet by bullet. Explain
+   why this role, using what the posting says.
+5. Write `letter.json` in the role folder (schema below). Use today's date in the style's date format.
+6. **Build and run the naturalness pass:** `laika letter-build "<role folder>"`.
+   - It writes `First_Last_Cover_Letter_<Mon><YY>.docx` and `.pdf`, checks the rules, and links the
+     letter on the role (the tracker's "Cover Letter" column and the role card). Exit code 2 means a rule
+     failed: fix the letter and rerun.
+   - It also prints a **naturalness check**: stock phrases, very even sentence or paragraph lengths,
+     repeated sentence openings, stock transitions, too many lists of three, long dashes and exclamation
+     marks.
+   - Read the draft once more as the user would say it. Rewrite each flagged item in the user's own words,
+     following their style, rather than swapping in synonyms.
+   - Rebuild until the check is clean, or every remaining note is a deliberate choice.
+7. Read the PDF and check it: one page, nothing cut off, a clean header.
+8. Deliver: give both paths (and send the PDF with SendUserFile when that tool is available).
+   - In one or two lines, say what the letter emphasises and what the naturalness pass changed.
+   - Ask for feedback, and suggest the user change a sentence or two in the Word file in their own words.
+     Laika learns from those edits.
 
 ## Feedback: revise the letter and update the style
 
@@ -149,6 +175,27 @@ relocation plans"):
    - Always add a dated line to the "Feedback log":
      `- <date> (<company> - <role>): "<feedback>" -> <what changed in the style, or "letter only">`.
 3. Tell the user in one line what you saved to their style (or that it applied to this letter only).
+
+## Learning from the user's own edits
+
+When the user says they edited the letter themselves ("I changed a few lines in the Word file"):
+
+1. `laika letter-diff "<role folder>"`. It compares the newest .docx in the folder (or `--file
+   <edited.docx>`) with Laika's `letter.json`. It prints words per sentence before and after, and every
+   sentence they changed, removed or added. If the file is open in Word, ask them to save and close it
+   first.
+2. Work out the patterns behind the edits, and add them to the style file as rules. Examples:
+   - shorter sentences
+   - plainer words ("use" instead of "utilize")
+   - a different opening or closing
+   - phrases they always cut, and words they always add
+
+   One-off content changes are not style rules. Log the session in the "Feedback log", e.g.
+   `- <date> (<company> - <role>): learned from your edits -> <rules added>`.
+3. `laika letter-diff "<role folder>" --update-json` saves their text into `letter.json`, keeping Laika's
+   draft as `letter.previous.json`. Rebuild with `letter-build` only if they want the PDF to match. The
+   text is kept, but manual formatting they did in Word is not, so say so.
+4. Tell the user in one or two lines what you learned from their edits.
 
 ## Writing style file (`Writing Style/Laika Writing Style.md`)
 
@@ -183,6 +230,9 @@ kept as is at your request (<date>) | professional by default
 
 ## Cover letter rules (from your feedback)
 - ...
+
+## Personal details you've shared
+- e.g. relocating to <city> for <reason>; why they're moving into <industry> (used only when relevant)
 
 ## Feedback log
 - <date> (<company> - <role>): "<feedback>" -> <what changed>

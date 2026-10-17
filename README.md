@@ -33,6 +33,11 @@ for any role you pick.
 - **Writes cover letters in your voice.** The first time, choose a polished default tone, or share a few
   things you've written (posts, documents, emails) and Laika learns your style. Every piece of feedback
   ("shorter", "less formal") updates the letter and the saved style, so the next one starts closer.
+- **Keeps letters sounding like you.**
+  - Laika asks for one personal detail before drafting.
+  - It checks every draft for stock phrases and machine-like rhythm, and rewrites them in your voice.
+  - It learns from the sentences you change yourself in the Word file. No detector tricks: just your
+    voice and real details.
 - **Records your decisions:** applied, ignored, or pending. They go into `Job Tracker.xlsx`, plus a card
   per role with a snapshot of the job description.
 - **Learns from your choices.** After each round it looks for patterns, such as titles you always skip
@@ -101,6 +106,8 @@ e.g. `apply 1,3 · ignore 2 (too junior)`.
 - **"Make me a CV for #2"** builds a CV tailored to that role, saved next to the others in `Tailored CVs/`.
 - **"Write a cover letter for #2"** / **"both 3"**, and then feedback like **"make it less formal"**.
 - **"Learn my writing style from these posts: <links>"**
+- **"I edited the letter myself"** makes Laika compare your version with its draft and learn from the
+  changes.
 
 ## Your job-search folder
 

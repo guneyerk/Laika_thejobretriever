@@ -68,7 +68,8 @@ Python 3.10+ from python.org.
 | `tailor REF` | Prepare a tailored CV for one role: its folder, the CV and certificate paths, the base content, and the role card with the job description |
 | `cv-build FOLDER [--pdf auto\|libreoffice\|word\|none]` | Build the CV .docx + .pdf from the folder's `content.json`, check the rules, and link it on the role |
 | `letter REF` | Prepare a cover letter for one role: its folder, the writing-style status, the base CV content, any tailored CV, and the role card |
-| `letter-build FOLDER [--pdf ...]` | Build the one-page cover letter .docx + .pdf from the folder's `letter.json`, check the rules, and link it on the role |
+| `letter-build FOLDER [--pdf ...]` | Build the one-page cover letter .docx + .pdf from the folder's `letter.json`, check the rules and naturalness, and link it on the role |
+| `letter-diff FOLDER [--file DOCX] [--update-json]` | Compare the user's edited Word letter with Laika's draft, to learn their style from the edits (optionally save their text into `letter.json`) |
 | `style show` / `style add FILE...` / `style samples` / `style path` | The writing style for cover letters: show the style file / save writing samples / print the samples' text / print the style file path |
 | `list show\|set\|add\|remove roles\|locations\|sites [items...] [--reason R]` | Edit the text files (logged in the changelog) |
 | `criteria show` / `criteria set KEY VALUE [--reason R]` | Search criteria (logged). Unknown keys become custom rules |
@@ -211,6 +212,11 @@ them from your CV and certificates, in your standard format and your writing sty
     applying for.
   - If a learned style is too casual for a job application, ask once whether to adjust it
     ("Application fit" in cover-letter.md).
+  - Before drafting, ask for one personal touch (why this role, a specific moment). After building, fix
+    what the naturalness check flags, in the user's own words. Never use tricks aimed at AI detectors.
+- **"I edited the letter myself"**: `laika letter-diff "<folder>"`, turn the patterns in their edits into
+  style rules, and offer `--update-json` so their text is kept (cover-letter.md, "Learning from the user's
+  own edits").
 - **Feedback on a cover letter** ("too formal", "make it shorter"): revise and rebuild the letter, then
   update the writing style and its feedback log (cover-letter.md, "Feedback").
 - **Writing style** ("use my LinkedIn posts for my style", "here are some emails I wrote", "show my writing
