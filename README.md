@@ -3,7 +3,8 @@
 **A personal job-search agent for [Claude Code](https://code.claude.com).** Laika finds the most relevant
 job boards for the regions you select and brings in the fresh openings from them. It rates each one
 against your CV, explains why it fits and what could be a problem, keeps every role in an Excel tracker
-with no duplicates, and learns from what you apply to and ignore.
+with no duplicates, learns from what you apply to and ignore, and writes a tailored CV and cover letter
+for any role you pick.
 
 > [!WARNING]
 > **Please read the [Disclaimer](DISCLAIMER.md) before using Laika.** In short:
@@ -20,11 +21,18 @@ with no duplicates, and learns from what you apply to and ignore.
 ## What Laika does
 
 - **Onboards you in a few questions:** your CV, locations, target roles, seniority, team leadership, work
-  mode and job sites. Everything goes into a job-search folder you choose.
+  mode and job sites, plus any licenses and certifications if you like. Everything goes into a job-search
+  folder you choose.
 - **Searches only for what's new.** Every query remembers when it last ran, so you never see the same
   role twice. The same job posted on two sites counts once.
-- **Rates every role 0-100 against your CV,** with a short "why it fits" and "watch out" for each, and
-  shows you a ranked shortlist with links.
+- **Rates every role 0-100 against your CV** and any licenses and certifications you add, with a short
+  "why it fits" and "watch out" for each, and shows you a ranked shortlist with links.
+- **Writes tailored CVs.** Pick a role and Laika builds a CV for it from your CV and certificates, in one
+  clean two-page layout, as Word and PDF. It uses only your real figures: if a key number is missing, it
+  asks you instead of inventing one.
+- **Writes cover letters in your voice.** The first time, choose a polished default tone, or share a few
+  things you've written (posts, documents, emails) and Laika learns your style. Every piece of feedback
+  ("shorter", "less formal") updates the letter and the saved style, so the next one starts closer.
 - **Records your decisions:** applied, ignored, or pending. They go into `Job Tracker.xlsx`, plus a card
   per role with a snapshot of the job description.
 - **Learns from your choices.** After each round it looks for patterns, such as titles you always skip
@@ -40,6 +48,7 @@ with no duplicates, and learns from what you apply to and ignore.
 | **Claude Code** (desktop app or terminal, local sessions) | Laika runs as a Claude Code plugin |
 | **Python 3.10+** | Laika's helper script (tracker, de-duplication, LinkedIn fetching). On Windows it's `python`, on macOS/Linux `python3` |
 | `openpyxl` and `pypdf` Python packages | Excel tracker and PDF CV reading. Laika offers to install them on first run |
+| *Optional:* `python-docx`, plus **LibreOffice** or **Microsoft Word** | Tailored CVs and cover letters: `python-docx` writes the Word file, and LibreOffice (any OS) or Word (Windows) turns it into a PDF |
 | *Optional:* a browser tool, either the Claude desktop app's **built-in browser** or **Claude in Chrome** | Needed only for job boards that block scripted access (method `browser`) |
 
 ## Install
@@ -73,8 +82,9 @@ Type **`/laika:laika`**, or just say **"Hi Laika"**. Laika asks for:
 1. your **CV**, as a file path (PDF, Word, TXT, Markdown) or pasted text
 2. your **locations**, such as `Berlin, Germany`, `Remote (EMEA)`
 3. the **roles** you want
-4. where to create your **job-search folder**
-5. a few search parameters: seniority, team leadership, work mode, job sites, things to avoid
+4. *optionally*, your **licenses and certifications** (certificate files)
+5. where to create your **job-search folder**
+6. a few search parameters: seniority, team leadership, work mode, job sites, things to avoid
 
 It then runs the first search, looking back 14 days, and shows you a ranked shortlist. Reply naturally,
 e.g. `apply 1,3 · ignore 2 (too junior)`.
@@ -87,13 +97,17 @@ e.g. `apply 1,3 · ignore 2 (too junior)`.
 - **"Add Amsterdam to my locations"** / **"Also search for Head of Revenue Operations"**
 - **"Sales roles should only be in industries I've worked in"** saves a rule that's applied from then on.
 - **"Find the best job sites for Singapore"**
-- **"Here's my updated CV: ~/Documents/cv.pdf"**
+- **"Here's my updated CV: ~/Documents/cv.pdf"** / **"Add my PMP certificate: ~/Downloads/pmp.pdf"**
+- **"Make me a CV for #2"** builds a CV tailored to that role, saved next to the others in `Tailored CVs/`.
+- **"Write a cover letter for #2"** / **"both 3"**, and then feedback like **"make it less formal"**.
+- **"Learn my writing style from these posts: <links>"**
 
 ## Your job-search folder
 
 ```
 Laika Job Search/
 ├── CV/                    your CV (older versions in CV/Archive) + "Laika CV Summary.md"
+├── Licenses and Certifications/   optional: certificates Laika reads together with your CV
 ├── Locations/locations.txt
 ├── Roles/roles.txt
 ├── Search Criteria/       criteria.txt + changelog.md (every change and why)
@@ -101,6 +115,9 @@ Laika Job Search/
 ├── Roles Scanned/         one report per search
 ├── Roles Applied/         one card per role you apply to
 ├── Roles Ignored/         one card per role you ignore
+├── Tailored CVs/          one folder per role you asked a CV for (Word + PDF)
+├── Cover Letters/         one folder per role you asked a cover letter for (Word + PDF)
+├── Writing Style/         how you write (Laika Writing Style.md) + the samples it learned from
 ├── Job Tracker.xlsx       every role: Role, Company Name, Relevancy Score, Search Date, Status, ...
 └── .laika/                Laika's memory (job database, search history)
 ```
@@ -109,6 +126,10 @@ Laika Job Search/
 `Low Match` (scanned, but below your minimum score).
 
 **You can edit things yourself:**
+- **Licenses and Certifications:** drop certificate files (PDF, Word, text or images) in this folder.
+  It's optional; with none, Laika uses your CV alone.
+- **`Writing Style/Laika Writing Style.md`:** correct or add rules any time. Laika follows it for every
+  letter.
 - **The text files:** Laika notices the changes on its next run. A new role, location or site gets a
   full 14-day lookback.
 - **`Laika CV Summary.md`:** this is how Laika reads your profile. Correct it and Laika uses your version.
@@ -148,6 +169,10 @@ yourself, or skips that site for this search. Those queries keep their window, s
 - Your CV and job descriptions are read by Claude as part of your Claude Code conversation, under your
   Claude account's terms. Laika sends no data anywhere else.
 - Web searches contain only role titles, locations and site names, never CV content.
+- Tailored CVs and cover letters are written to your job-search folder only. Laika never sends them
+  anywhere or applies for you.
+- Writing samples you share are kept in `Writing Style/Samples/`. If you let Laika use a connected mailbox,
+  it reads only the messages you point it to and never sends anything.
 
 ## Limitations
 
@@ -184,8 +209,8 @@ Update or uninstall Laika from the `/plugin` panel. Uninstalling leaves your job
 .claude-plugin/marketplace.json          the marketplace catalog (one plugin: laika)
 plugins/laika/.claude-plugin/plugin.json plugin manifest
 plugins/laika/skills/laika/SKILL.md      Laika's main instructions
-plugins/laika/skills/laika/references/   onboarding, search playbook, scoring rubric, feedback loop
-plugins/laika/skills/laika/scripts/      laika.py helper + requirements.txt
+plugins/laika/skills/laika/references/   onboarding, search playbook, scoring rubric, feedback loop, tailored CVs, cover letters
+plugins/laika/skills/laika/scripts/      laika.py helper, cv_builder.py (CVs and cover letters) + requirements.txt
 examples/sample-cv.md                    fictional CV for trying Laika out
 ```
 

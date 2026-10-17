@@ -37,7 +37,7 @@ try:  # Windows consoles default to cp1252; job data is full of Turkish/other ch
 except Exception:
     pass
 
-VERSION = "1.0.0"
+VERSION = "1.2.0"
 GLOBAL_CONFIG = Path.home() / ".laika" / "config.json"
 PROFILE_FILE = ".laika-profile.json"   # put this file in a folder to give that folder its own Laika profile
 
@@ -62,6 +62,10 @@ CONFIG_PATH, CONFIG_KIND = resolve_config()
 # Master folder layout
 # ----------------------------------------------------------------------------
 DIR_CV = "CV"
+DIR_CERTS = "Licenses and Certifications"   # optional; read together with the CV
+DIR_TAILORED = "Tailored CVs"               # one folder per role: tailored CV (.docx + .pdf) and its content.json
+DIR_LETTERS = "Cover Letters"               # one folder per role: cover letter (.docx + .pdf) and its letter.json
+DIR_STYLE = "Writing Style"                 # the user's writing style for cover letters (+ Samples/)
 DIR_LOCATIONS = "Locations"
 DIR_ROLES = "Roles"
 DIR_CRITERIA = "Search Criteria"
@@ -70,8 +74,8 @@ DIR_SCANNED = "Roles Scanned"
 DIR_APPLIED = "Roles Applied"
 DIR_IGNORED = "Roles Ignored"
 DIR_INTERNAL = ".laika"
-ALL_DIRS = [DIR_CV, DIR_LOCATIONS, DIR_ROLES, DIR_CRITERIA, DIR_SITES,
-            DIR_SCANNED, DIR_APPLIED, DIR_IGNORED, DIR_INTERNAL]
+ALL_DIRS = [DIR_CV, DIR_CERTS, DIR_LOCATIONS, DIR_ROLES, DIR_CRITERIA, DIR_SITES,
+            DIR_SCANNED, DIR_APPLIED, DIR_IGNORED, DIR_TAILORED, DIR_LETTERS, DIR_INTERNAL]
 
 F_LOCATIONS = f"{DIR_LOCATIONS}/locations.txt"
 F_ROLES = f"{DIR_ROLES}/roles.txt"
@@ -79,6 +83,9 @@ F_CRITERIA = f"{DIR_CRITERIA}/criteria.txt"
 F_SITES = f"{DIR_SITES}/sites.txt"
 F_CHANGELOG = f"{DIR_CRITERIA}/changelog.md"
 F_CV_SUMMARY = f"{DIR_CV}/Laika CV Summary.md"
+F_CV_BASE = f"{DIR_TAILORED}/Base CV content.json"   # the CV as structured content, the start of every tailored CV
+F_STYLE = f"{DIR_STYLE}/Laika Writing Style.md"      # how the user writes; Laika keeps it up to date from feedback
+DIR_STYLE_SAMPLES = f"{DIR_STYLE}/Samples"
 F_TRACKER = "Job Tracker.xlsx"
 F_DB = f"{DIR_INTERNAL}/jobs.json"
 F_STATE = f"{DIR_INTERNAL}/state.json"
@@ -464,6 +471,7 @@ def log_change(m: Path, what: str, reason: str = "") -> None:
 # Change detection
 # ----------------------------------------------------------------------------
 TEXT_EXT = {".txt", ".md"}
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic"}
 
 
 def cv_files(m: Path) -> list[Path]:
@@ -474,9 +482,23 @@ def cv_files(m: Path) -> list[Path]:
                   if p.is_file() and not p.name.startswith(("~$", ".")) and p.name != Path(F_CV_SUMMARY).name)
 
 
+def cert_files(m: Path) -> list[Path]:
+    """Documents in the optional Licenses and Certifications folder (subfolders included)."""
+    d = m / DIR_CERTS
+    if not d.exists():
+        return []
+    return sorted(p for p in d.rglob("*")
+                  if p.is_file() and not any(part.startswith(("~$", ".")) for part in p.relative_to(d).parts))
+
+
+def cert_rel(m: Path, p: Path) -> str:
+    return f"{DIR_CERTS}/{p.relative_to(m / DIR_CERTS).as_posix()}"
+
+
 def tracked_files(m: Path) -> list[str]:
     rels = [F_LOCATIONS, F_ROLES, F_CRITERIA, F_SITES, F_CV_SUMMARY]
     rels += [f"{DIR_CV}/{p.name}" for p in cv_files(m)]
+    rels += [cert_rel(m, p) for p in cert_files(m)]
     return rels
 
 
@@ -854,7 +876,8 @@ def add_candidate(run: dict, item: dict, idx: tuple[dict, dict], crit: dict, rol
 TRACKER_COLUMNS = [
     ("Role", 42), ("Company Name", 30), ("Relevancy Score", 11), ("Search Date", 12), ("Status", 12),
     ("Location", 24), ("Link", 13), ("Source", 12), ("Posted", 12), ("Decision Date", 13),
-    ("Why Relevant", 60), ("Possible Concerns", 50), ("My Notes", 30), ("Job ID", 9),
+    ("Why Relevant", 60), ("Possible Concerns", 50), ("My Notes", 30), ("Tailored CV", 12), ("Cover Letter", 12),
+    ("Job ID", 9),
 ]
 
 
@@ -946,7 +969,8 @@ def excel_write(m: Path, db: dict, st: dict) -> bool:
                 dt.date.fromisoformat(j["posted"]) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", j.get("posted") or "") else (j.get("posted") or None),
                 dt.date.fromisoformat(j["status_date"]) if j["status"] in ("Applied", "Ignored") and j.get("status_date") else None,
                 j.get("why", ""), (j.get("concerns", "") + (f"\n[Your reason: {j['reason']}]" if j.get("reason") else "")).strip(),
-                j.get("user_notes", ""), j["id"]]
+                j.get("user_notes", ""), "Open CV" if j.get("tailored_cv") else "",
+                "Open letter" if j.get("cover_letter") else "", j["id"]]
         for ci, v in enumerate(vals, start=1):
             c = ws.cell(row=r, column=ci, value=v)
             c.alignment = wrap if ci in (1, 2, 11, 12, 13) else top
@@ -956,6 +980,11 @@ def excel_write(m: Path, db: dict, st: dict) -> bool:
             lc = ws.cell(row=r, column=7)
             lc.hyperlink = j["url"]
             lc.font = link_font
+        for col, key in ((14, "tailored_cv"), (15, "cover_letter")):
+            if j.get(key):  # relative to the tracker, so the link survives moving the folder
+                cc = ws.cell(row=r, column=col)
+                cc.hyperlink = j[key]
+                cc.font = link_font
     last = max(2, len(jobs) + 1)
     ws.freeze_panes = "B2"
     ws.auto_filter.ref = f"A1:{get_column_letter(len(TRACKER_COLUMNS))}{last}"
@@ -995,6 +1024,7 @@ def excel_write(m: Path, db: dict, st: dict) -> bool:
         "Every role Laika has scanned is listed once on the 'Job Tracker' sheet (newest search first).",
         "Status: Pending = shown to you, waiting for your decision | Applied | Ignored | Low Match = scanned, scored below your threshold.",
         "You can change a Status here (drop-down) or type in 'My Notes'. Save and close the file - Laika picks the edits up on its next run.",
+        "Tailored CV / Cover Letter link to what Laika made for that role (in 'Tailored CVs' / 'Cover Letters').",
         "Do not edit the 'Job ID' column; Laika uses it to match rows.",
         "Laika rewrites this file after every search and decision, so keep it closed while Laika is working.",
     ]
@@ -1035,6 +1065,8 @@ def card_text(j: dict) -> str:
              f"- **Location:** {j.get('location') or '-'}",
              f"- **Source:** {j.get('source') or '-'}",
              f"- **Link:** {j.get('url') or '-'}",
+             *([f"- **Tailored CV:** {j['tailored_cv']} ({j.get('tailored_cv_date', '-')})"] if j.get("tailored_cv") else []),
+             *([f"- **Cover letter:** {j['cover_letter']} ({j.get('cover_letter_date', '-')})"] if j.get("cover_letter") else []),
              f"- **Posted:** {j.get('posted') or '-'}",
              f"- **Found in search:** {j['search_date']} (run {j.get('run_id', '-')})",
              f"- **Laika ID:** {j['id']}", "",
@@ -1235,6 +1267,303 @@ def cmd_cv(a):
     (m / DIR_INTERNAL / "cv_text.txt").write_text(text, encoding="utf-8")
     print(f"CV_FILE: {cur}\n" + "-" * 60)
     print(text)
+    certs = cert_files(m)
+    if certs:
+        print("-" * 60 + f"\nLICENSES & CERTIFICATIONS: {len(certs)} document(s) in {DIR_CERTS}/ - read them too "
+              "(`certs text`).")
+
+
+def cmd_certs(a):
+    m = get_master()
+    d = m / DIR_CERTS
+    d.mkdir(parents=True, exist_ok=True)
+    if a.action == "add":
+        if not a.files:
+            die("certs add needs one or more file paths")
+        for f in a.files:
+            src = Path(f).expanduser()
+            if not src.is_file():
+                die(f"File not found: {src}")
+            dest = d / src.name
+            if src.resolve() == dest.resolve():
+                print(f"Already in place: {dest}")
+                continue
+            existed = dest.exists()
+            shutil.copy2(src, dest)
+            print(f"{'Replaced' if existed else 'Saved'}: {dest}")
+        return
+    files = cert_files(m)
+    if not files:
+        print(f"No documents in {DIR_CERTS}/ - that's fine, Laika works from the CV alone. "
+              "Licenses and certificates are optional (PDF, Word, text or image files).")
+        return
+    for p in files:
+        rel = p.relative_to(d).as_posix()
+        if a.action == "list":
+            print(f"  {rel} ({p.suffix.lower().lstrip('.') or 'file'}, {max(1, p.stat().st_size // 1024)} KB)")
+            continue
+        print(f"=== {rel}")
+        if p.suffix.lower() in IMAGE_EXT:
+            print(f"IMAGE - no text layer. Read the file directly to see the certificate: {p}")
+            continue
+        try:
+            text = extract_text(p)
+        except Exception as e:  # noqa: BLE001 - one unreadable file should not hide the others
+            text, err = None, e
+        else:
+            err = None
+        if text is None:
+            why = f"error: {err}" if err else ("install pypdf for PDFs" if p.suffix.lower() == ".pdf" else "unsupported type")
+            print(f"Could not extract text ({why}). Read the file directly: {p}")
+        elif not text.strip():
+            print(f"No text layer (scanned document?). Read the file directly: {p}")
+        else:
+            print(trim(text, 4000))
+
+
+def load_cv_builder():
+    """The CV builder module next to this script (kept separate so it also runs on its own)."""
+    sys.dont_write_bytecode = True  # keep the skill folder free of __pycache__
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import cv_builder  # noqa: E402
+    return cv_builder
+
+
+def month_tag(d: dt.date | None = None) -> str:
+    """The standard CV file-name date, e.g. Oct26 or Sept26."""
+    d = d or dt.date.today()
+    return f"{load_cv_builder().MONTH_TAGS[d.month - 1]}{d:%y}"
+
+
+def role_dir(m: Path, j: dict, top: str = DIR_TAILORED) -> Path:
+    """The role's folder under Tailored CVs/ or Cover Letters/ (found again by its [Job ID])."""
+    base = m / top
+    if base.exists():
+        for p in base.iterdir():
+            if p.is_dir() and p.name.endswith(f"[{j['id']}]"):
+                return p
+    # Leave room inside the Windows path limit for the CV file names in the folder.
+    budget = max(0, 215 - len(str(base)) - len(f"\\ -  [{j['id']}]"))
+    comp_len = min(30, budget // 3)
+    title_len = min(50, budget - comp_len)
+    if comp_len >= 4 and title_len >= 6:
+        return base / f"{safe_name(j['company'], comp_len)} - {safe_name(j['title'], title_len)} [{j['id']}]"
+    return base / f"[{j['id']}]"
+
+
+def cmd_tailor(a):
+    m = get_master()
+    st, db = load_state(m), load_db(m)
+    jobs = resolve_refs(a.ref, db, st)
+    if len(jobs) != 1:
+        die("tailor takes one role at a time: a list number or a job ID like J0012")
+    j = jobs[0]
+    folder = role_dir(m, j)
+    folder.mkdir(parents=True, exist_ok=True)
+    cvs = cv_files(m)
+    cur = max(cvs, key=lambda p: p.stat().st_mtime) if cvs else None
+    certs = cert_files(m)
+    base = m / F_CV_BASE
+    content = folder / "content.json"
+    print(f"TAILOR FOLDER: {folder}")
+    print(f"CONTENT FILE: {content} ({'exists - update it' if content.exists() else 'write it'})")
+    if not base.exists():
+        print(f"BASE CONTENT: {base} - not created yet. Write it first from the CV and certificates "
+              "(see references/tailored-cv.md).")
+    else:
+        newer = [p.name for p in ([cur] if cur else []) + certs if p.stat().st_mtime > base.stat().st_mtime]
+        print(f"BASE CONTENT: {base}" + (f" - OLDER than {', '.join(newer)}: refresh it first." if newer else ""))
+    print(f"CV: {cur or 'MISSING'}")
+    print(f"LICENSES & CERTIFICATIONS: {len(certs)} document(s)" +
+          (": " + ", ".join(cert_rel(m, p) for p in certs) if certs else " (optional - CV only)"))
+    print(f"OUTPUT NAME: First_Last_CV_{month_tag()} (cv-build derives it from the name in content.json)")
+    if j.get("tailored_cv"):
+        print(f"EXISTING TAILORED CV: {j['tailored_cv']} ({j.get('tailored_cv_date', '-')})")
+    print(f"BUILD: laika cv-build \"{folder}\"")
+    print("=" * 70)
+    print(card_text(j))
+
+
+def cmd_cv_build(a):
+    m = get_master()
+    src = Path(a.target).expanduser()
+    content = src / "content.json" if src.is_dir() else src
+    if not content.is_file():
+        die(f"content.json not found: {content}")
+    try:
+        cv = json.loads(content.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as e:
+        die(f"{content} is not valid JSON: {e}")
+    cv_builder = load_cv_builder()
+    person = re.sub(r"[^\w-]+", "_", safe_name(cv.get("name") or "CV")).strip("_") or "CV"
+    name = a.name or f"{person}_CV_{month_tag()}"
+    out_base = content.parent / name
+    code = cv_builder.build(content, out_base, pdf=a.pdf)
+    if code == 0:
+        record_document(m, content.parent, out_base, "tailored_cv")
+    if code:
+        sys.exit(code)
+
+
+def style_state(m: Path) -> str:
+    f = m / F_STYLE
+    if not f.exists():
+        return "NOT SET - ask the user before the first cover letter (see references/cover-letter.md)"
+    text = f.read_text(encoding="utf-8", errors="replace")
+    hit = re.search(r"\*\*Mode:\*\*\s*([^.\n]+)", text)
+    samples = len(style_samples(m))
+    return (hit.group(1).strip() if hit else "set") + (f" | {samples} sample(s)" if samples else "")
+
+
+def style_fit(m: Path) -> str | None:
+    """The style file's application-fit decision, or None when it hasn't been checked yet."""
+    f = m / F_STYLE
+    if not f.exists():
+        return None
+    text = f.read_text(encoding="utf-8", errors="replace")
+    hit = re.search(r"\*\*Application fit:\*\*\s*([^\n_]+)", text)
+    if hit:
+        return hit.group(1).strip().rstrip(".")
+    if re.search(r"\*\*Mode:\*\*\s*default professional", text):
+        return "professional by default"
+    return None
+
+
+def style_samples(m: Path) -> list[Path]:
+    d = m / DIR_STYLE_SAMPLES
+    if not d.exists():
+        return []
+    return sorted(p for p in d.rglob("*")
+                  if p.is_file() and not any(part.startswith(("~$", ".")) for part in p.relative_to(d).parts))
+
+
+def eml_text(p: Path) -> str:
+    import email
+    from email import policy
+    msg = email.message_from_bytes(p.read_bytes(), policy=policy.default)
+    part = msg.get_body(preferencelist=("plain", "html"))
+    body = ""
+    if part is not None:
+        body = part.get_content()
+        if part.get_content_type() == "text/html":
+            body = html_to_text(body)
+    return f"From: {msg['from']}\nTo: {msg['to']}\nSubject: {msg['subject']}\n\n{body}"
+
+
+def cmd_style(a):
+    m = get_master()
+    d = m / DIR_STYLE_SAMPLES
+    if a.action == "add":
+        if not a.files:
+            die("style add needs one or more file paths")
+        d.mkdir(parents=True, exist_ok=True)
+        for f in a.files:
+            src = Path(f).expanduser()
+            if not src.is_file():
+                die(f"File not found: {src}")
+            dest = d / src.name
+            existed = dest.exists()
+            if src.resolve() != dest.resolve():
+                shutil.copy2(src, dest)
+            print(f"{'Replaced' if existed else 'Saved'}: {dest}")
+        return
+    if a.action == "path":
+        print(m / F_STYLE)
+        return
+    if a.action == "show":
+        print(f"WRITING STYLE: {style_state(m)}")
+        print(f"FILE: {m / F_STYLE}")
+        if (m / F_STYLE).exists():
+            print("-" * 60 + "\n" + (m / F_STYLE).read_text(encoding="utf-8"))
+        return
+    files = style_samples(m)  # action == "samples"
+    if not files:
+        print(f"No writing samples in {DIR_STYLE_SAMPLES}/.")
+        return
+    for p in files:
+        print(f"=== {p.relative_to(d).as_posix()}")
+        if p.suffix.lower() in IMAGE_EXT:
+            print(f"IMAGE - Read the file directly: {p}")
+            continue
+        try:
+            text = eml_text(p) if p.suffix.lower() == ".eml" else extract_text(p)
+        except Exception as e:  # noqa: BLE001 - one unreadable file should not hide the others
+            text = None
+            print(f"(error: {e})")
+        if text is None:
+            print(f"Could not extract text. Read the file directly: {p}")
+        else:
+            print(trim(text, a.chars))
+
+
+def cmd_letter(a):
+    m = get_master()
+    st, db = load_state(m), load_db(m)
+    jobs = resolve_refs(a.ref, db, st)
+    if len(jobs) != 1:
+        die("letter takes one role at a time: a list number or a job ID like J0012")
+    j = jobs[0]
+    folder = role_dir(m, j, DIR_LETTERS)
+    folder.mkdir(parents=True, exist_ok=True)
+    content = folder / "letter.json"
+    base = m / F_CV_BASE
+    certs = cert_files(m)
+    print(f"LETTER FOLDER: {folder}")
+    print(f"LETTER FILE: {content} ({'exists - revise it' if content.exists() else 'write it'})")
+    print(f"WRITING STYLE: {style_state(m)} -> {m / F_STYLE}")
+    if (m / F_STYLE).exists():
+        print(f"APPLICATION FIT: {style_fit(m) or 'NOT CHECKED - check the style against job applications first and ask the user if it is too casual (references/cover-letter.md, Application fit)'}")
+    print(f"FACTS: {base if base.exists() else 'Base CV content not created yet - write it first (references/tailored-cv.md)'}")
+    print(f"LICENSES & CERTIFICATIONS: {len(certs)} document(s)" + ("" if certs else " (optional - CV only)"))
+    if j.get("tailored_cv"):
+        print(f"TAILORED CV FOR THIS ROLE: {j['tailored_cv']} (keep the letter consistent with it)")
+    if j.get("cover_letter"):
+        print(f"EXISTING COVER LETTER: {j['cover_letter']} ({j.get('cover_letter_date', '-')})")
+    print(f"OUTPUT NAME: First_Last_Cover_Letter_{month_tag()} (letter-build derives it from the name in letter.json)")
+    print(f'BUILD: laika letter-build "{folder}"')
+    print("=" * 70)
+    print(card_text(j))
+
+
+def record_document(m: Path, folder: Path, out_base: Path, key: str) -> None:
+    """Link a built CV or letter on its role (folder name ends in [Job ID]): db, card and Excel."""
+    hit = re.search(r"\[(J\d+)\]$", folder.name)
+    if not hit:
+        return
+    db, st = load_db(m), load_state(m)
+    j = find_job(db, hit.group(1))
+    if not j:
+        return
+    pdf, docx = Path(f"{out_base}.pdf"), Path(f"{out_base}.docx")
+    j[key] = (pdf if pdf.exists() else docx).resolve().relative_to(m.resolve()).as_posix()
+    j[f"{key}_date"] = today_str()
+    write_card(m, j)
+    excel_ok = excel_write(m, db, st)
+    save_db(m, db)
+    save_state(m, st)
+    print(f"Recorded on {j['id']} ({j['title']} - {j['company']}); Excel {'updated' if excel_ok else 'NOT updated (file open)'}.")
+
+
+def cmd_letter_build(a):
+    m = get_master()
+    src = Path(a.target).expanduser()
+    content = src / "letter.json" if src.is_dir() else src
+    if not content.is_file():
+        die(f"letter.json not found: {content}")
+    try:
+        letter = json.loads(content.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError as e:
+        die(f"{content} is not valid JSON: {e}")
+    cv_builder = load_cv_builder()
+    person = re.sub(r"[^\w-]+", "_", safe_name(letter.get("name") or "Cover")).strip("_") or "Cover"
+    out_base = content.parent / (a.name or f"{person}_Cover_Letter_{month_tag()}")
+    code = cv_builder.build_letter(content, out_base, pdf=a.pdf)
+    if code == 0:
+        record_document(m, content.parent, out_base, "cover_letter")
+    if code:
+        sys.exit(code)
 
 
 def cmd_status(a):
@@ -1256,6 +1585,12 @@ def cmd_status(a):
     cvs = cv_files(m)
     print(f"CV: {', '.join(p.name for p in cvs) if cvs else 'MISSING'}"
           f" | Laika CV summary: {'yes' if (m / F_CV_SUMMARY).exists() else 'NOT WRITTEN YET'}")
+    for d in (DIR_CERTS, DIR_TAILORED, DIR_LETTERS):  # folders added after 1.0; older setups get them here
+        (m / d).mkdir(exist_ok=True)
+    certs = cert_files(m)
+    names = ", ".join(p.name for p in certs[:6]) + (f" (+{len(certs) - 6} more)" if len(certs) > 6 else "")
+    print(f"Licenses & certifications: {f'{len(certs)} document(s): {names}' if certs else 'none (optional)'}")
+    print(f"Writing style (cover letters): {style_state(m)}")
     roles, locs, sites = read_lines(m / F_ROLES), read_lines(m / F_LOCATIONS), read_sites(m)
     print(f"Roles ({len(roles)}): {'; '.join(roles) or '-'}")
     print(f"Locations ({len(locs)}): {'; '.join(locs) or '-'}")
@@ -1426,7 +1761,7 @@ def print_plan(run: dict) -> None:
         for q in qs:
             loc = q.get("location") or " / ".join(q.get("locations", []))
             flag = " (new combination - full lookback)" if q.get("new_combo") else ""
-            done = " [done]" if q.get("done") else ""
+            done = " [done]" if q.get("done") else (f" [stopped early: {q['error']}]" if q.get("error") else "")
             print(f"  {q['qid']} {q['site']}: {q['role']} @ {loc} | since {q['since']}{flag}{done}")
             if method != "api":
                 print(f"      {q.get('search_hint') or q['url']}")
@@ -1444,11 +1779,11 @@ def cmd_fetch_linkedin(a):
     if not qs:
         print("No LinkedIn queries in this run's plan.")
         return
+    todo = qs if a.refetch else [q for q in qs if not q.get("done")]
+    if len(todo) < len(qs):
+        print(f"{len(qs) - len(todo)} queries already fetched - skipping them (use --refetch to repeat).")
     total_new = 0
-    for q in qs:
-        if q.get("done") and not a.refetch:
-            print(f"{q['qid']} already fetched - skipping (use --refetch to repeat).")
-            continue
+    for q in todo:
         seen = new = dup = old = 0
         err = None
         for start in range(0, maxq, 10):
@@ -1479,8 +1814,12 @@ def cmd_fetch_linkedin(a):
         run["stats"]["duplicates"] += dup
         run["stats"]["old"] = run["stats"].get("old", 0) + old
         if err:
+            # Partial results stay in the run, but the query is not done (also after --refetch): a plain rerun
+            # fetches it again, and if it never finishes, `register` keeps its old window.
+            q["done"] = False
             q["error"] = err
-            print(f"{q['qid']} {q['role']} @ {q['location']}: stopped early ({err}) - seen {seen}, new {new}")
+            print(f"{q['qid']} {q['role']} @ {q['location']}: stopped early ({err}) - seen {seen}, new {new} "
+                  "(kept, not marked done)")
         else:
             q["done"] = True
             q.pop("error", None)
@@ -1489,10 +1828,14 @@ def cmd_fetch_linkedin(a):
         total_new += new
         save_run(m, run)
         polite_sleep(a.delay)
-    print(f"LinkedIn done: {total_new} new candidates. Run total: {len(run['candidates'])}.")
-    if any(q.get("error") for q in qs):
-        print("Some queries hit errors (often LinkedIn rate limiting). Wait a few minutes and run "
-              "`fetch-linkedin` again - finished queries are skipped.")
+    incomplete = [f"{q['qid']} ({q.get('error') or 'not fetched'})" for q in qs if not q.get("done")]
+    if incomplete:
+        print("Some queries stopped early (often LinkedIn rate limiting). What they found is kept, but they are "
+              "not marked done. Wait a few minutes and run `fetch-linkedin` again - only unfinished queries run.")
+        print(f"LinkedIn incomplete: {total_new} new candidates. Run total: {len(run['candidates'])}. "
+              f"Not done: {', '.join(incomplete)}.")
+    else:
+        print(f"LinkedIn done: {total_new} new candidates. Run total: {len(run['candidates'])}.")
 
 
 def cmd_add_candidates(a):
@@ -1740,8 +2083,13 @@ def cmd_register(a):
           f"low match {len(jobs) - len(shortlist)}")
     print(f"Excel: {'updated' if excel_ok else 'NOT updated (file open)'} -> {m / F_TRACKER}")
     print(f"Report: {report}")
-    if not_run:
-        print(f"NOTE: {len(not_run)} queries were never marked as searched ({', '.join(not_run)}). They keep their "
+    stopped = {q["qid"]: q["error"] for q in run["plan"] if q["qid"] in not_run and q.get("error")}
+    if stopped:
+        print(f"NOTE: {len(stopped)} queries stopped early ({', '.join(f'{k} {v}' for k, v in stopped.items())}). "
+              "What they found is registered, and they keep their old window, so the next search covers them again.")
+    never = [x for x in not_run if x not in stopped]
+    if never:
+        print(f"NOTE: {len(never)} queries were never marked as searched ({', '.join(never)}). They keep their "
               "old window for next time. If they did run, mark them with `add-candidates --query` or `run done` "
               "before registering.")
     if not shortlist:
@@ -2022,6 +2370,17 @@ def cmd_doctor(a):
         except ImportError:
             print(f"  MISSING {mod} - {why}")
             missing.append(mod)
+    try:
+        __import__("docx")
+        print("  ok   python-docx - tailored CVs and cover letters (optional)")
+    except ImportError:
+        print("  MISSING python-docx - tailored CVs and cover letters (optional)")
+        missing.append("python-docx")
+    engines = load_cv_builder().pdf_engines()
+    names = {"libreoffice": "LibreOffice", "word": "Microsoft Word"}
+    print(f"  {'ok  ' if engines else 'NONE'} PDF converter for CVs and letters: "
+          + (", ".join(names[e] for e in engines) if engines else "install LibreOffice (or use Microsoft Word on "
+             "Windows) - without one, CVs and letters are Word files only"))
     if missing:
         print(f"  Install with:  \"{sys.executable}\" -m pip install -r \"{req}\"")
     print(f"Config: {CONFIG_PATH} ({'found' if CONFIG_PATH.exists() else 'not created yet'})")
@@ -2072,6 +2431,38 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("action", choices=["add", "text", "path"])
     s.add_argument("file", nargs="?")
     s.set_defaults(func=cmd_cv)
+
+    s = sub.add_parser("certs", help="Licenses & certifications documents (optional): list | text | add FILE...")
+    s.add_argument("action", choices=["list", "text", "add"])
+    s.add_argument("files", nargs="*")
+    s.set_defaults(func=cmd_certs)
+
+    s = sub.add_parser("tailor", help="Prepare a tailored CV for one role (list number or job ID)")
+    s.add_argument("ref")
+    s.set_defaults(func=cmd_tailor)
+
+    s = sub.add_parser("cv-build", help="Build a CV .docx + .pdf from content.json (or its folder) and check the rules")
+    s.add_argument("target", help="A tailored-CV folder or a content.json file")
+    s.add_argument("--name", help="Output file name without extension (default First_Last_CV_<Mon><YY>)")
+    s.add_argument("--pdf", choices=["auto", "libreoffice", "word", "none"], default="auto",
+                   help="PDF converter (auto: LibreOffice, else Microsoft Word)")
+    s.set_defaults(func=cmd_cv_build)
+
+    s = sub.add_parser("letter", help="Prepare a cover letter for one role (list number or job ID)")
+    s.add_argument("ref")
+    s.set_defaults(func=cmd_letter)
+
+    s = sub.add_parser("letter-build", help="Build the cover letter .docx + .pdf from letter.json (or its folder)")
+    s.add_argument("target", help="A cover-letter folder or a letter.json file")
+    s.add_argument("--name", help="Output file name without extension (default First_Last_Cover_Letter_<Mon><YY>)")
+    s.add_argument("--pdf", choices=["auto", "libreoffice", "word", "none"], default="auto")
+    s.set_defaults(func=cmd_letter_build)
+
+    s = sub.add_parser("style", help="Writing style for cover letters: show | path | add FILE... | samples")
+    s.add_argument("action", choices=["show", "path", "add", "samples"])
+    s.add_argument("files", nargs="*")
+    s.add_argument("--chars", type=int, default=6000, help="Max characters printed per sample")
+    s.set_defaults(func=cmd_style)
 
     s = sub.add_parser("list", help="Show or edit roles / locations / sites")
     s.add_argument("action", choices=["show", "set", "add", "remove"])

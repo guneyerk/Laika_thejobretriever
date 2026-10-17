@@ -1,7 +1,11 @@
 # Scoring roles against the CV
 
-Inputs: the run's `for_scoring.md`, `CV/Laika CV Summary.md` (or `cv text` when you need detail), the
-criteria (`laika criteria show`), and the learnings from `laika feedback`. Output: `scores.json` in the
+Inputs:
+- the run's `for_scoring.md`
+- `CV/Laika CV Summary.md`, which covers the CV and any licenses and certifications. Use `cv text` and
+  `certs text` when you need detail.
+- the criteria (`laika criteria show`)
+- the learnings from `laika feedback` Output: `scores.json` in the
 run folder.
 
 ```json
@@ -17,7 +21,7 @@ run folder.
 | Dimension | Points | What to check |
 |---|---|---|
 | Role & function fit | 25 | Is this actually the job the user targets? The title AND the real responsibilities, not just keywords |
-| Skills & domain fit | 25 | Must-have skills, tools and industry vs. the CV. Preferred industries add, excluded industries subtract |
+| Skills & domain fit | 25 | Must-have skills, tools, licenses/certifications and industry vs. the CV and certificates. Preferred industries add, excluded industries subtract |
 | Seniority & experience | 20 | Years asked vs. the CV, scope of the role vs. the `seniority` criterion. Too junior and too senior both lose points |
 | Leadership fit | 10 | People management asked vs. the `team_leadership` criterion and the CV's leadership history |
 | Location, work mode & language | 10 | In one of the user's locations (or truly remote)? Work mode in `work_mode`? Required languages on the CV? |
@@ -49,6 +53,9 @@ After a criteria change, re-check the roles still **Pending** against the new ru
 
 - 1-2 sentences each, concrete, and tied to CV evidence ("8 years of B2C product work, incl. checkout
   at Y") or posting evidence ("requires 3+ years of people management").
+- Licenses and certifications count as evidence like CV lines. A credential the posting asks for and the user
+  holds goes in "why" (e.g. "asks for PMP - you hold it, 2023"). One it requires that the user lacks, or that
+  has expired, goes in concerns. With no certificate documents, judge from the CV alone.
 - Concerns are what a recruiter would probe or what could make the role a bad fit: missing must-haves,
   seniority mismatch, domain gap, location or work-mode doubt, agency posting with an unknown employer,
   large applicant count, posting age.

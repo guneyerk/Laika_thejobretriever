@@ -1,5 +1,58 @@
 # Changelog
 
+## 1.2.0 - 2026-10-17
+
+- **Cover letters:** after rating roles, Laika offers cover letters together with tailored CVs
+  (`cv 1`, `letter 2`, `both 3`).
+  - Each letter is one page, in the same design as the CV, as an editable .docx plus a PDF. It's saved in
+    `Cover Letters/` and linked in a new "Cover Letter" tracker column and on the role card.
+  - It uses only facts from the user's CV, certificates and what they say.
+- **Writing style:** the first time, Laika asks whether to use a default professional tone or learn the
+  user's own style from samples they share (links, documents, emails or pasted text).
+  - The style is saved in `Writing Style/Laika Writing Style.md`, which the user can edit.
+  - Feedback on a letter revises the letter and updates the style, with a dated feedback log.
+- New `letter`, `letter-build` and `style` commands. `cv_builder.py` builds letters too (`--letter`).
+  The shared design code was refactored, and CV output is unchanged.
+- `status` shows whether a writing style is set.
+- `Tailored CVs/` and `Cover Letters/` are part of the folder layout from setup on. Existing folders get them on the next `status`.
+- Every cover letter opens with a short professional introduction (name, current role, the role applied
+  for), whatever the writing style.
+- **Application fit:** when a learned style is too casual for a job application (slang, emojis, ALL CAPS,
+  jokes, a rant-style tone, casual sign-offs), Laika asks once whether to adjust it for applications.
+  - The answer is recorded in the style file, and `letter` shows whether the check is still to do.
+
+## 1.1.0 - 2026-10-17
+
+- **Licenses and Certifications:** a new, optional folder in the job-search folder.
+  - Laika reads its documents (PDF, Word, text or images) together with the CV. They go into the CV
+    summary and the scoring, and Laika notices when one is added, changed or removed.
+  - New `certs list | text | add` commands.
+  - With an empty folder, nothing changes: Laika uses the CV alone.
+- **Tailored CVs:** after rating roles, Laika offers to write a CV tailored to a role.
+  - It's built from the user's CV and certificates in one fixed two-page layout (Calibri/Arial, blue
+    headings, reverse-chronological) as an editable .docx plus a PDF.
+  - Rules: real metrics only (no placeholders, missing figures are asked for), at most two pages, and a
+    fixed section order.
+  - New `tailor` and `cv-build` commands and a bundled `cv_builder.py` (needs `python-docx`). The PDF is
+    made with LibreOffice, or Microsoft Word on Windows.
+  - Each CV is saved in `Tailored CVs/`, linked in a new "Tailored CV" column of the tracker and on the
+    role card.
+- `doctor` also checks the tailored-CV tools.
+
+## 1.0.1 - 2026-10-17
+
+- LinkedIn: a query that stops early (rate limiting or another error) is no longer left marked done,
+  also after `--refetch`. What it found stays in the run, a plain `fetch-linkedin` rerun fetches only
+  the unfinished queries, and the last line of the output lists them. If one never finishes, `register`
+  keeps its old window and says so.
+- `fetch-linkedin` prints one line for the queries it skips instead of one line each, and `run status`
+  marks queries that stopped early.
+- kariyer.net: when in-page `fetch()` is refused (HTTP 403) but pages still load, the playbook now reads
+  the cards from the visible page, one title at a time. Laika stops and asks the user only when page
+  loads are blocked too, and never attempts the press-and-hold check.
+- kariyer.net: the playbook notes that a card's "N gün" counts from the last update, so most cards are
+  roles already in the tracker (de-duplication drops them).
+
 ## 1.0.0 - 2026-10-16
 
 First public release.

@@ -26,7 +26,10 @@ laika details --cids ...      # descriptions for the candidates you'll score (or
   location mismatches unless the description says remote and open to the user's country.
 - The seniority labels LinkedIn shows are often wrong ("Associate" on a 5+-year role, "Entry level" on a
   director role). Judge seniority from the description.
-- HTTP 429/999 means rate limiting. Wait a few minutes and rerun; finished queries are skipped.
+- HTTP 429/999 means rate limiting. The query stops early: what it found is kept, but it isn't marked
+  done, and the last line lists the unfinished queries. Wait a few minutes and rerun; only those run
+  again. Don't mark them with `run done`: if one never finishes, `register` keeps its old window so the
+  next search covers it.
 
 ## Browser sites (`browser`)
 
@@ -44,7 +47,9 @@ its skill first) or Claude in Chrome (`mcp__claude-in-chrome__*`). The general p
    you are human" check, **stop and do not attempt it.** Call `tabs_context` to see whether the browser
    pane is visible; if it's hidden, ask the user to show it (Ctrl/Cmd+Shift+B in the desktop app). Then
    ask them to complete the check and continue afterwards. If they'd rather skip, put the site's query
-   IDs in `register --skipped`.
+   IDs in `register --skipped`. A refused in-page `fetch()` (HTTP 403) while the tab itself still loads
+   normally is different: don't stop, read the visible page instead, one search at a time (see
+   kariyer.net below).
 4. **Filter** to cards in the user's locations, within the window, and with titles plausibly related to
    the target roles. Job-board keyword search is often loose ("Sales Director" returns sales executives),
    so drop unrelated titles here instead of registering noise.
@@ -65,46 +70,59 @@ searched. `age_days` or `posted` lets the helper drop postings older than the wi
 
 ### kariyer.net (Turkey)
 
-Search URL: `https://www.kariyer.net/is-ilanlari?kw=<title>`. The pages are server-rendered, so in-page
-`fetch()` returns the result cards. Senior roles are posted mostly with **Turkish titles** (Satış
-Direktörü, Pazarlama Direktörü, Dijital Dönüşüm Direktörü, Yapay Zeka...); English titles return mostly
-noise. A card's "N gün" is days since posting or update.
+Search URL: `https://www.kariyer.net/is-ilanlari?kw=<title>`. The pages are server-rendered, so the result
+cards (`a.k-ad-card`) are in the HTML, whether you `fetch()` the page in-page or read the loaded page.
+Senior roles are posted mostly with **Turkish titles** (Satış Direktörü, Pazarlama Direktörü, Dijital
+Dönüşüm Direktörü, Yapay Zeka...); English titles return mostly noise.
 
-Start the search loop from a kariyer.net tab, with the plan's titles for this site in `KWS`:
+A card's "N gün" counts from the posting's **last update**, not from when it was first posted. Employers
+refresh listings often, so most cards inside the window are roles already in the tracker. That's
+expected: de-duplication drops them at `add-candidates`, so many cards and few new roles is normal.
+
+**Card reader.** Define it in the kariyer.net tab. It reads a fetched page or the visible one
+(`document`). Set the defaults: `MAX_AGE` is the days back to the query's `since` date, `PLACE` the
+user's locations as cards show them.
+
+```js
+window.__kread = (doc, MAX_AGE = 14, PLACE = /istanbul|İstanbul|uzaktan|remote/i) => {
+  const cards = [...doc.querySelectorAll('a.k-ad-card')], kept = [];
+  for (const a of cards) {
+    const L = [...a.querySelectorAll('span')].filter(e => e.children.length === 0 && e.textContent.trim())
+      .map(e => ({c: String(e.className || ''), t: e.textContent.trim()}));
+    const ti = L.findIndex(x => x.c.includes('k-ad-card-title'));
+    const txt = a.textContent.replace(/\s+/g, ' ');
+    const m = txt.match(/(\d+)\s*(gün|hafta|ay|saat|dakika)\b/);
+    let age = null;
+    if (m) age = m[2] === 'gün' ? +m[1] : m[2] === 'hafta' ? 7 * m[1] : m[2] === 'ay' ? 30 * m[1] : 0;
+    else if (/Bugün|Yeni/.test(txt)) age = 0;
+    const loc = ((a.querySelector('.location') || {}).textContent || '').trim();
+    const wm = ((a.querySelector('.work-model') || {}).textContent || '').trim();
+    if (!PLACE.test(loc + ' ' + wm) || (age !== null && age > MAX_AGE)) continue;
+    const href = (a.getAttribute('href') || '').split('?')[0];
+    kept.push({title: ti >= 0 ? L[ti].t : '', company: (L.slice(ti + 1).find(x => !x.c) || {}).t || '',
+      location: loc, work_mode: wm, url: href.startsWith('http') ? href : 'https://www.kariyer.net' + href, age_days: age});
+  }
+  return {cards: cards.length, kept};
+};
+```
+
+**Search loop.** Then start the loop from the same tab, with the plan's titles for this site in `KWS`:
 
 ```js
 window.__laika = {done: false, out: {}, stats: {}};
 (async () => {
   const KWS = ["Satış Direktörü", "Pazarlama Direktörü"];   // this site's titles from the plan
-  const MAX_AGE = 14;                                        // days back to the query's `since` date
-  const PLACE = /istanbul|İstanbul|uzaktan|remote/i;         // the user's locations as cards show them
   for (const kw of KWS) {
     try {
-      const html = await (await fetch('/is-ilanlari?kw=' + encodeURIComponent(kw), {credentials: 'include'})).text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      if (/denied|captcha/i.test(doc.title)) { window.__laika.stats[kw] = 'BLOCKED'; break; }
-      const cards = [...doc.querySelectorAll('a.k-ad-card')];
-      let kept = 0;
-      for (const a of cards) {
-        const L = [...a.querySelectorAll('span')].filter(e => e.children.length === 0 && e.textContent.trim())
-          .map(e => ({c: String(e.className || ''), t: e.textContent.trim()}));
-        const ti = L.findIndex(x => x.c.includes('k-ad-card-title'));
-        const txt = a.textContent.replace(/\s+/g, ' ');
-        const m = txt.match(/(\d+)\s*(gün|hafta|ay|saat|dakika)\b/);
-        let age = null;
-        if (m) age = m[2] === 'gün' ? +m[1] : m[2] === 'hafta' ? 7 * m[1] : m[2] === 'ay' ? 30 * m[1] : 0;
-        else if (/Bugün|Yeni/.test(txt)) age = 0;
-        const loc = ((a.querySelector('.location') || {}).textContent || '').trim();
-        const wm = ((a.querySelector('.work-model') || {}).textContent || '').trim();
-        if (!PLACE.test(loc + ' ' + wm) || (age !== null && age > MAX_AGE)) continue;
-        const href = (a.getAttribute('href') || '').split('?')[0];
-        const url = href.startsWith('http') ? href : 'https://www.kariyer.net' + href;
-        kept++;
-        const rec = window.__laika.out[url] || {title: ti >= 0 ? L[ti].t : '', company: (L.slice(ti + 1).find(x => !x.c) || {}).t || '',
-          location: loc, work_mode: wm, url, age_days: age, kw: []};
-        rec.kw.push(kw); window.__laika.out[url] = rec;
+      const r = await fetch('/is-ilanlari?kw=' + encodeURIComponent(kw), {credentials: 'include'});
+      const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+      if (!r.ok || /denied|captcha/i.test(doc.title)) { window.__laika.stats[kw] = 'BLOCKED ' + r.status; break; }
+      const {cards, kept} = window.__kread(doc);
+      for (const rec of kept) {
+        const prev = window.__laika.out[rec.url] || (window.__laika.out[rec.url] = {...rec, kw: []});
+        prev.kw.push(kw);
       }
-      window.__laika.stats[kw] = cards.length + ' cards / ' + kept + ' kept';
+      window.__laika.stats[kw] = cards + ' cards / ' + kept.length + ' kept';
     } catch (e) { window.__laika.stats[kw] = 'ERROR ' + e; }
     await new Promise(r => setTimeout(r, 4000 + Math.random() * 2000));
   }
@@ -116,24 +134,49 @@ window.__laika = {done: false, out: {}, stats: {}};
 Poll with `({done: window.__laika.done, stats: window.__laika.stats, n: Object.keys(window.__laika.out).length})`,
 then read the results with `JSON.stringify(Object.values(window.__laika.out))`.
 
-Descriptions (one posting at a time, a few seconds apart, from the same tab):
+**When in-page `fetch()` is refused but pages still load.** kariyer.net sometimes answers in-page
+`fetch()` with HTTP 403 ("Access to this page has been denied") right after the tab itself loaded
+normally. The loop then stops with `BLOCKED 403`. This is not the press-and-hold check, so don't stop
+the site and don't retry the fetch. Read the cards from the visible page instead, for each title that
+isn't in `stats` yet:
+
+1. First save what the loop found (`JSON.stringify(Object.values(window.__laika.out))`), because
+   navigating clears `window`.
+2. Navigate the tab to `https://www.kariyer.net/is-ilanlari?kw=<title>` (URL-encoded) and wait about
+   3 seconds for it to load.
+3. Define the card reader again (each page load clears it), followed by
+   `JSON.stringify(window.__kread(document))`, in one `javascript_tool` call.
+4. Merge the results by URL. Keep about 5 seconds between page loads; a `browser_batch` of navigate,
+   wait and `javascript_tool` does one title per call.
+
+In-page `fetch()` has worked again after the user completed a press-and-hold check, so after one, try
+the loop for the remaining titles.
+
+**Press-and-hold check.** kariyer.net uses a press-and-hold bot check ("Kısa bir güvenlik doğrulaması…
+Basılı Tut"). Opening many pages quickly, or navigating straight to guessed URLs, triggers it; the
+in-page approach above rarely does. If a **page load** shows the check or an "Access denied" page, page
+loads are blocked too: stop and ask the user, as in step 3 of the general pattern. **Never attempt the
+check yourself** (no pressing, clicking or scripting it).
+
+**Descriptions** (one posting at a time, a few seconds apart, from the same tab):
 
 ```js
-window.__laikaDesc = async (path) => {
-  const html = await (await fetch(path, {credentials: 'include'})).text();
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  if (/denied/i.test(doc.title)) return 'BLOCKED';
+window.__kdesc = (doc) => {
   const blocks = [...doc.querySelectorAll('div, section, article')]
     .filter(e => /qualification|job-detail|genel-nitelik|is-tanimi|detail-content|job-description|ilan-detay|description/i.test(e.className || ''))
     .map(e => e.textContent.replace(/\s+/g, ' ').trim()).filter(t => t.length > 150).sort((a, b) => a.length - b.length);
   return (blocks.find(x => /NİTELİK|Nitelik|İŞ TANIMI|İş Tanımı|Responsib|Qualif/i.test(x)) || blocks[0] || '').slice(0, 3000);
 };
+window.__laikaDesc = async (path) => {
+  const r = await fetch(path, {credentials: 'include'});
+  const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+  return !r.ok || /denied/i.test(doc.title) ? 'BLOCKED ' + r.status : window.__kdesc(doc);
+};
 await window.__laikaDesc('/is-ilani/<slug-and-id>')
 ```
 
-kariyer.net uses a press-and-hold bot check ("Kısa bir güvenlik doğrulaması… Basılı Tut"). Opening many
-pages quickly, or navigating straight to guessed URLs, triggers it. The in-page approach above
-rarely does.
+If `fetch()` is refused here too, navigate to the few most promising postings instead, define
+`window.__kdesc` again and run `window.__kdesc(document)`, with the same pacing.
 
 ### GulfTalent (UAE / Gulf)
 

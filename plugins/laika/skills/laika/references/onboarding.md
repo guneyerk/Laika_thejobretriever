@@ -15,8 +15,12 @@ One short message, for example:
 > 1. **Your CV**: a file path (PDF, Word, TXT or Markdown), or paste the text here
 > 2. **Locations**: cities or countries you'd work in, and whether remote counts
 > 3. **Roles**: the job titles you're interested in
+>
+> *Optional:* any **licenses or certifications** you want me to weigh too (certificate files: PDF, Word,
+> text or images). Skip this if your CV covers it.
 
-Wait for the answer. If something is missing, ask only for that.
+Wait for the answer. If something is missing, ask only for that. Never ask again for licenses and
+certifications if the user skips them: Laika works from the CV alone.
 
 - CV as a path: check that the file exists (quote paths with spaces).
 - CV pasted as text: keep it. You'll save it to `<master>/CV/CV.md` after step 3.
@@ -48,6 +52,10 @@ laika init --master "<folder>" --cv "<cv path>" --roles "Role A" "Role B" --loca
 
 Pasted CV: run `init` without `--cv`, then Write the text to `<master>/CV/CV.md`.
 
+Licenses and certifications, if the user gave any: `laika certs add "<file 1>" "<file 2>"`. If they listed
+them as text instead, Write them to `<master>/Licenses and Certifications/certifications.md`, one per line
+(name, issuer, year).
+
 If `init` prints **`EXISTING_SETUP`**, the folder already holds a Laika profile, and nothing in it was
 changed. Tell the user what's there, then ask whether to use that existing profile (skip ahead to
 `laika status`) or to pick a different folder. Pass `--replace-profile` only if the user explicitly
@@ -58,6 +66,7 @@ Resulting layout (show it to the user once):
 ```
 <master>/
 ├── CV/                    your CV (old versions go to CV/Archive) + Laika CV Summary.md
+├── Licenses and Certifications/   optional: certificates Laika reads together with your CV
 ├── Locations/locations.txt
 ├── Roles/roles.txt
 ├── Search Criteria/       criteria.txt + changelog.md
@@ -65,18 +74,22 @@ Resulting layout (show it to the user once):
 ├── Roles Scanned/         one search report per search
 ├── Roles Applied/         one card per role you apply to
 ├── Roles Ignored/         one card per role you ignore
+├── Tailored CVs/          one folder per role you ask a tailored CV for (Word + PDF)
+├── Cover Letters/         one folder per role you ask a cover letter for (Word + PDF)
+├── Writing Style/         your writing style for cover letters (created with the first letter)
 └── Job Tracker.xlsx       every role, with score, date and status
 ```
 
 ## 4. Read the CV and write the CV summary
 
-`laika cv text`. If it prints that extraction failed, Read the CV file directly. Then Write
-`<master>/CV/Laika CV Summary.md` using this template. It's how Laika sees the user, and the user may edit
-it to correct you.
+`laika cv text`. If it prints that extraction failed, Read the CV file directly. If there are
+licenses and certifications, also run `laika certs text`, and Read image files and scans directly. Then
+Write `<master>/CV/Laika CV Summary.md` using this template. It's how Laika sees the user (CV and
+certificates together), and the user may edit it to correct you.
 
 ```markdown
 # How Laika reads your CV
-_Last updated: <date> from <cv file name>. Edit this file if anything is off - Laika will use your corrections._
+_Last updated: <date> from <cv file name> (+ <N> documents in Licenses and Certifications). Edit this file if anything is off - Laika will use your corrections._
 
 - **Current / last title:** ...
 - **Total experience:** ~N years (N in <function>)
@@ -86,7 +99,9 @@ _Last updated: <date> from <cv file name>. Edit this file if anything is off - L
 - **Tools / technical:** ...
 - **Industries / domains:** ...
 - **Notable achievements:** 2-4 bullets with numbers where the CV has them
-- **Education & certifications:** ...
+- **Education:** ...
+- **Licenses & certifications:** name (issuer, year, valid until if stated) - from the CV and the Licenses and
+  Certifications folder; "none provided" if there are none
 - **Languages:** ...
 - **Location / mobility hints:** ...
 - **Likely strongest-fit roles:** ...
