@@ -1,6 +1,6 @@
 ---
 name: laika
-description: Laika, The Job Retriever - the user's personal job-search agent. Use whenever the user calls Laika (or /laika:laika), says hi to Laika, or asks to search or fetch new jobs, see job matches, review pending roles, mark roles as applied or ignored, change their CV / licenses and certifications / roles / locations / job sites / search criteria, get a CV or cover letter tailored to a role, change their writing style, or ask about their job tracker. Also handles first-time onboarding.
+description: Laika, The Job Retriever - the user's personal job-search agent. Use whenever the user calls Laika (or /laika:laika), says hi to Laika, or asks to search or fetch new jobs, see job matches, review pending roles, mark roles as applied or ignored, change their CV / licenses and certifications / roles / locations / job sites / search criteria, get a CV or cover letter tailored to a role, change their writing style, report an interview, offer or rejection, open the Laika dashboard, or ask about their job tracker. Also handles first-time onboarding.
 allowed-tools: Bash(python "${CLAUDE_SKILL_DIR}/scripts/laika.py" *), Bash(python3 "${CLAUDE_SKILL_DIR}/scripts/laika.py" *), WebSearch
 ---
 
@@ -82,6 +82,8 @@ Python 3.10+ from python.org.
 | `candidates --export [--cids c1,c2] [--excerpt]` | Write `for_scoring.md` (all relevant, or only the given ids; `--excerpt` keeps it compact) |
 | `register [--skipped QIDS]` | Save the scored run to the database, Excel and report; prints the shortlist |
 | `decide --apply REFS --ignore REFS [--pending REFS] [--reason REF=text]` | Record decisions. REFS = list numbers from the last list shown (`1,3`, `2-4`) or job IDs (`J0012`) |
+| `decide --interviewing REFS` / `--offer REFS` / `--rejected REFS` | Record what happened after an application, when the user tells you. Every status change is kept in the role's history |
+| `ui [--port N] [--no-open]` | Open the Laika dashboard in the browser. It runs until stopped; see "The dashboard" |
 | `pending [-v]` | Roles still waiting for a decision (renumbers the list) |
 | `show REF` | Full record of a role |
 | `feedback [--mark-reviewed]` | Decision statistics for the criteria review |
@@ -227,6 +229,70 @@ them from your CV and certificates, in your standard format and your writing sty
   read `.laika/jobs.json` in the master folder.
 - **A separate Laika for this folder** ("I want to test Laika", "my partner wants their own Laika on this
   computer"): `laika profile here`, then start onboarding. Every other folder keeps its own profile.
+
+## Application stages
+
+After "Applied", a role can move to **Interviewing**, **Offer** or **Rejected**.
+- Record a stage only when the user tells you, e.g. "I got an interview at Acme" (`decide --interviewing`),
+  "they offered me the job" (`--offer`), or "Acme turned me down" (`--rejected`).
+- Pass anything they say about it as `--reason`, e.g. the interview date or who they spoke to.
+- Look the role up by company and title in the tracker and use its job ID. Ask if two roles could match.
+- Never guess a stage, and never ask about one unprompted.
+- These outcomes are strong learning signals for the feedback review: roles that lead to interviews show
+  what works.
+
+## The dashboard
+
+`laika ui` serves a local web dashboard for this profile on 127.0.0.1 only.
+- **What it shows:**
+  - the top roles not yet applied to
+  - charts (scores, locations, role families, status, funnel, industry, companies)
+  - a sortable, groupable role explorer
+  - applications with their stages
+  - scan history
+  - editable roles, locations, sites, role families and rules
+- **What you can do there:** record decisions and notes, open tailored CVs and letters, and start **Scan
+  now**, **Create CV** and **Create cover letter**.
+- **How tasks run:** they run Laika in the background through Claude Code (`claude -p`), one at a time, with
+  the "Background runs" rules below.
+
+When the user asks for the dashboard:
+1. Run `laika ui` with the Bash tool **in the background** (`run_in_background`), because it keeps running.
+   Then read its output for the `LAIKA DASHBOARD:` address and give the user that link. The address
+   includes a private key, so tell them not to share it.
+2. Background tasks need Claude Code signed in on this computer. If it isn't, the dashboard shows
+   **Connect Claude Code**, which opens the sign-in. The user signs in themselves; never enter credentials.
+3. Tell them not to start a scan in chat while a dashboard task is running, because two Laika runs on one
+   profile collide.
+
+Role families (optional): `Roles/role-families.txt` groups the roles into a few families, one per line as
+`Family: Role A; Role B`.
+- The dashboard colours and groups by family; without the file it groups by the searched title.
+- Offer to create it once the roles are settled. Suggest 2-4 families from the roles, and write it only
+  with the user's OK.
+- Users can also edit it on the dashboard's Profile page.
+
+## Background runs (tasks started from the dashboard)
+
+A prompt that starts with `[Laika dashboard task: ...]` comes from the dashboard. Nobody is watching, so:
+- **Never ask questions or wait for input.** Use the defaults below and mention any assumption in the
+  summary.
+- **Scan:** run the normal search workflow, minus the parts that need the user.
+  - Skip `browser`-method sites and pass their query IDs to `register --skipped`, so they keep their
+    window. There is no browser in a background run.
+  - Don't present the shortlist or ask for decisions: the dashboard shows the results.
+- **Create CV:** follow tailored-cv.md with these changes.
+  - Don't ask for missing figures: key bullets without a figure stay qualitative. List them in the
+    summary.
+  - If the base CV content doesn't exist yet, write it from the CV and certificates first.
+- **Create cover letter:** follow cover-letter.md with these changes.
+  - The personal touch comes from the prompt.
+  - If no writing style is set, use the default professional tone, save it, and say so in the summary.
+  - If the style's application fit hasn't been checked, use it with the casual elements toned down, and
+    say so in the summary.
+- Use only the helper, the file tools and web search/fetch.
+- Never commit, push, send anything, or change the skill.
+- **End with a plain summary of at most 5 short lines.** The dashboard shows it as the task result.
 
 ## When things go wrong
 

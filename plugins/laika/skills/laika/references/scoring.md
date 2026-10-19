@@ -16,6 +16,25 @@ run folder.
 ]
 ```
 
+Optional per role: `"industry"`, the employer's sector as one of:
+- Software & IT
+- Energy & utilities
+- Manufacturing & industrial
+- Financial services
+- Healthcare & pharma
+- Retail & consumer
+- Real estate & construction
+- Logistics & transport
+- Consulting & services
+- Media & marketing
+- Education
+- Recruiting
+- Public sector
+- Other
+
+The dashboard's industry chart uses it. Give it when the posting or the company makes the sector clear,
+and leave it out when you'd be guessing.
+
 ## Rubric (0-100)
 
 | Dimension | Points | What to check |

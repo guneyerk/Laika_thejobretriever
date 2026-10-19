@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Laika Dashboard</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="brandbar"></div>
+<div class="app">
+  <nav class="side" aria-label="Sections">
+    <div class="brand"><div class="logo">🐕</div><div><b>Laika</b><span>The Job Retriever</span></div></div>
+    <div id="navs" style="display:contents"></div>
+    <div class="foot" id="lastScan"></div>
+  </nav>
+  <div class="main">
+    <header class="topbar">
+      <h1 id="pageTitle">Overview</h1>
+      <div class="filters" id="filters"></div>
+      <div class="sp"></div>
+      <span id="theme"></span>
+      <button class="btn primary" id="scan"></button>
+    </header>
+    <section class="content" id="content">
+      <div class="banner" id="banner" style="display:none"></div>
+      <div class="page on" id="p-overview">
+        <div class="tiles" id="tiles"></div>
+        <div class="card accent" style="--cc: var(--fam4)">
+          <div class="card-h"><div class="section-title"><h3>Top roles you haven't applied to</h3><span class="sub" id="topSub"></span></div><button class="linkbtn" id="seeAll">See all roles</button></div>
+          <div id="top"></div>
+        </div>
+        <div class="grid2" id="charts"></div>
+      </div>
+      <div class="page" id="p-roles"><div id="roleTable"></div></div>
+      <div class="page" id="p-apps">
+        <div class="card"><div class="card-h"><div><h3>Your applications</h3><div class="sub" id="appsSub"></div></div></div>
+          <p class="muted" style="font-size:12.5px;margin:0 0 10px">Tell Laika in chat when you hear back ("I got an interview at Acme"), or set the stage here.</p>
+          <div id="appsTable" style="overflow:auto"></div></div>
+      </div>
+      <div class="page" id="p-scans">
+        <div class="card"><div class="card-h"><div><h3>Scan for new roles</h3><div class="sub">Searches everything posted since your last scan</div></div><button class="btn primary" id="scan2"></button></div>
+          <div id="scanTable" style="overflow:auto"></div></div>
+        <div class="card"><div class="card-h"><h3>Background tasks</h3></div><div class="tasklog" id="taskLog"></div></div>
+      </div>
+      <div class="page" id="p-profile"><div class="prof" id="profile"></div></div>
+    </section>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

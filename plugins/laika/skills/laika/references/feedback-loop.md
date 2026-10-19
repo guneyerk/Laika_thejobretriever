@@ -12,7 +12,7 @@ evidence supports, and apply only the ones the user approves.
 
 ## How to reason
 
-Run `laika feedback` and look for patterns with evidence of at least 2 decisions (1 is enough when the
+Run `laika feedback` (interviews, offers and rejections, listed under "Applications that moved on", are the strongest evidence of what works) and look for patterns with evidence of at least 2 decisions (1 is enough when the
 user stated an explicit rule, like "never agencies"):
 
 | Signal in feedback | Possible proposal |

@@ -40,6 +40,15 @@ for any role you pick.
     voice and real details.
 - **Records your decisions:** applied, ignored, or pending. They go into `Job Tracker.xlsx`, plus a card
   per role with a snapshot of the job description.
+- **Has a dashboard.** Run `laika ui` (or ask Laika to open the dashboard) for a local web page:
+  - the top roles you haven't applied to, with charts for scores, locations, role families and your
+    funnel
+  - a role explorer you can sort and group
+  - your applications and their interview stages
+  - one-click **Scan now**, **Create CV** and **Create cover letter**, which run in the background through
+    Claude Code
+- **Tracks what happens next.** Tell Laika "I got an interview at Acme" or "they turned me down", and the
+  role moves to Interviewing, Offer or Rejected, with a dated history.
 - **Learns from your choices.** After each round it looks for patterns, such as titles you always skip
   or roles it under-rated, and proposes concrete criteria changes. It changes nothing without your OK.
 - **Follows your rules.** For example: "sales roles only in my industries", "direct reports only matter
@@ -53,6 +62,7 @@ for any role you pick.
 | **Claude Code** (desktop app or terminal, local sessions) | Laika runs as a Claude Code plugin |
 | **Python 3.10+** | Laika's helper script (tracker, de-duplication, LinkedIn fetching). On Windows it's `python`, on macOS/Linux `python3` |
 | `openpyxl` and `pypdf` Python packages | Excel tracker and PDF CV reading. Laika offers to install them on first run |
+| *Optional:* Claude Code signed in on your computer | The dashboard's background tasks (Scan now, Create CV, Create cover letter) run Laika through `claude -p`. The dashboard's **Connect Claude Code** button starts the sign-in |
 | *Optional:* `python-docx`, plus **LibreOffice** or **Microsoft Word** | Tailored CVs and cover letters: `python-docx` writes the Word file, and LibreOffice (any OS) or Word (Windows) turns it into a PDF |
 | *Optional:* a browser tool, either the Claude desktop app's **built-in browser** or **Claude in Chrome** | Needed only for job boards that block scripted access (method `browser`) |
 
@@ -106,6 +116,8 @@ e.g. `apply 1,3 · ignore 2 (too junior)`.
 - **"Make me a CV for #2"** builds a CV tailored to that role, saved next to the others in `Tailored CVs/`.
 - **"Write a cover letter for #2"** / **"both 3"**, and then feedback like **"make it less formal"**.
 - **"Learn my writing style from these posts: <links>"**
+- **"Open the dashboard"** starts `laika ui` and gives you its link.
+- **"I got an interview at Acme"** / **"Acme made me an offer"** / **"they rejected me"**
 - **"I edited the letter myself"** makes Laika compare your version with its draft and learn from the
   changes.
 
@@ -129,8 +141,11 @@ Laika Job Search/
 └── .laika/                Laika's memory (job database, search history)
 ```
 
-**Status values:** `Pending` (shown to you, waiting for your decision), `Applied`, `Ignored`, and
-`Low Match` (scanned, but below your minimum score).
+**Status values:**
+- `Pending`: shown to you, waiting for your decision
+- `Applied`, then `Interviewing`, `Offer` or `Rejected` when you report news
+- `Ignored`
+- `Low Match`: scanned, but below your minimum score
 
 **You can edit things yourself:**
 - **Licenses and Certifications:** drop certificate files (PDF, Word, text or images) in this folder.
@@ -217,7 +232,7 @@ Update or uninstall Laika from the `/plugin` panel. Uninstalling leaves your job
 plugins/laika/.claude-plugin/plugin.json plugin manifest
 plugins/laika/skills/laika/SKILL.md      Laika's main instructions
 plugins/laika/skills/laika/references/   onboarding, search playbook, scoring rubric, feedback loop, tailored CVs, cover letters
-plugins/laika/skills/laika/scripts/      laika.py helper, cv_builder.py (CVs and cover letters) + requirements.txt
+plugins/laika/skills/laika/scripts/      laika.py helper, cv_builder.py (CVs and cover letters), dashboard.py + ui/ (the dashboard) + requirements.txt
 examples/sample-cv.md                    fictional CV for trying Laika out
 ```
 

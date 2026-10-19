@@ -68,7 +68,7 @@ Resulting layout (show it to the user once):
 ├── CV/                    your CV (old versions go to CV/Archive) + Laika CV Summary.md
 ├── Licenses and Certifications/   optional: certificates Laika reads together with your CV
 ├── Locations/locations.txt
-├── Roles/roles.txt
+├── Roles/roles.txt        (+ optional role-families.txt for the dashboard)
 ├── Search Criteria/       criteria.txt + changelog.md
 ├── Job Sites/sites.txt
 ├── Roles Scanned/         one search report per search

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.4.0 - 2026-10-18
+
+- **The Laika dashboard (`laika ui`):** a local web dashboard. It runs on your computer only and is
+  protected by a private key in its address.
+  - **Overview:**
+    - KPI tiles
+    - the top roles you haven't applied to, with Apply / Create CV / Create cover letter buttons
+    - charts: score distribution, where the roles are, role family, status (Pending / Applied / Ignored,
+      plus low matches), the scan-to-offer funnel, industry, top companies, and recruiters vs direct
+      employers
+  - **Roles:** a sortable, groupable explorer with a detail drawer.
+  - **Applications:** each role with its stage and documents.
+  - **Scans:** scan history and background tasks.
+  - **Profile & rules:** roles, locations, sites, role families and criteria, all editable.
+  - **Day / Night / Auto** themes, and colours validated for colour-blind readers in both themes.
+- **Background tasks:**
+  - Scan now, Create CV and Create cover letter run Laika through Claude Code (`claude -p`), one at a time,
+    with live steps and a summary.
+  - Connect Claude Code starts the one-time sign-in.
+  - SKILL.md has new "Background runs" rules: no questions, browser sites skipped, a short summary.
+- **Application stages:** Interviewing, Offer and Rejected after Applied.
+  - Recorded with `decide --interviewing / --offer / --rejected` when the user reports news.
+  - Every status change is kept in the role's history.
+  - The stages are in the Excel tracker drop-down and in the feedback review.
+- **Role families:** an optional `Roles/role-families.txt` groups roles for the dashboard.
+- **Industry:** scoring can record an optional `industry` per role for the dashboard.
+
 ## 1.3.0 - 2026-10-17
 
 - **Personal touch:** before drafting a cover letter, Laika asks one or two quick questions only the user

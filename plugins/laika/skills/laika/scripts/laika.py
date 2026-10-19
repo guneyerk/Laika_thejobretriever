@@ -37,7 +37,7 @@ try:  # Windows consoles default to cp1252; job data is full of Turkish/other ch
 except Exception:
     pass
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 GLOBAL_CONFIG = Path.home() / ".laika" / "config.json"
 PROFILE_FILE = ".laika-profile.json"   # put this file in a folder to give that folder its own Laika profile
 
@@ -85,14 +85,17 @@ F_CHANGELOG = f"{DIR_CRITERIA}/changelog.md"
 F_CV_SUMMARY = f"{DIR_CV}/Laika CV Summary.md"
 F_CV_BASE = f"{DIR_TAILORED}/Base CV content.json"   # the CV as structured content, the start of every tailored CV
 F_STYLE = f"{DIR_STYLE}/Laika Writing Style.md"      # how the user writes; Laika keeps it up to date from feedback
+F_FAMILIES = f"{DIR_ROLES}/role-families.txt"           # optional: groups roles into families for the dashboard
 DIR_STYLE_SAMPLES = f"{DIR_STYLE}/Samples"
 F_TRACKER = "Job Tracker.xlsx"
 F_DB = f"{DIR_INTERNAL}/jobs.json"
 F_STATE = f"{DIR_INTERNAL}/state.json"
 
-STATUSES = ["Pending", "Applied", "Ignored", "Low Match"]
+STATUSES = ["Pending", "Applied", "Interviewing", "Offer", "Rejected", "Ignored", "Low Match"]
 STATUS_ORDER = {s: i for i, s in enumerate(STATUSES)}
-CARD_DIRS = {"Applied": DIR_APPLIED, "Ignored": DIR_IGNORED}
+APPLIED_STAGES = ("Applied", "Interviewing", "Offer", "Rejected")   # an application and what happened next
+DECIDED = APPLIED_STAGES + ("Ignored",)
+CARD_DIRS = {**{st: DIR_APPLIED for st in APPLIED_STAGES}, "Ignored": DIR_IGNORED}
 
 LIST_SPECS = {
     "locations": (F_LOCATIONS, "Locations", [
@@ -351,6 +354,30 @@ def new_job_id(db: dict) -> str:
     i = db.get("next_id", 1)
     db["next_id"] = i + 1
     return f"J{i:04d}"
+
+
+def set_status(j: dict, status: str, via: str, date: str | None = None) -> None:
+    """Change a role's status and keep a dated history of every change."""
+    date = date or today_str()
+    if not j.get("history") and j.get("status") and j["status"] != status:
+        # Roles saved before 1.4.0 have no history: start it with the status they had.
+        j["history"] = [{"status": j["status"], "date": j.get("status_date") or j.get("search_date") or date,
+                         "via": j.get("status_via") or "earlier"}]
+    if j.get("status") != status or not j.get("history"):
+        j.setdefault("history", []).append({"status": status, "date": date, "via": via})
+    j["status"] = status
+    j["status_date"] = date
+    j["status_via"] = via
+
+
+def read_families(m: Path) -> list[tuple[str, list[str]]]:
+    """Role families from Roles/role-families.txt ("Family: Role A; Role B"), in file order."""
+    out = []
+    for ln in read_lines(m / F_FAMILIES):
+        if ":" in ln:
+            fam, roles = ln.split(":", 1)
+            out.append((fam.strip(), [r.strip() for r in re.split(r"[;,]", roles) if r.strip()]))
+    return out
 
 
 def db_index(db: dict) -> tuple[dict, dict]:
@@ -918,9 +945,7 @@ def excel_sync_in(m: Path, db: dict) -> list[tuple[dict, str, str]]:
             new = match_status(r[col["Status"]])
             if new and new != j.get("excel_status") and new != j["status"]:
                 old = j["status"]
-                j["status"] = new
-                j["status_date"] = today_str()
-                j["status_via"] = "excel"
+                set_status(j, new, "excel")
                 changed.append((j, old, new))
             if "My Notes" in col and len(r) > col["My Notes"]:
                 note = r[col["My Notes"]]
@@ -967,7 +992,7 @@ def excel_write(m: Path, db: dict, st: dict) -> bool:
                 dt.date.fromisoformat(j["search_date"]), j["status"], j.get("location", ""),
                 "Open posting" if j.get("url") else "", j.get("source", ""),
                 dt.date.fromisoformat(j["posted"]) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", j.get("posted") or "") else (j.get("posted") or None),
-                dt.date.fromisoformat(j["status_date"]) if j["status"] in ("Applied", "Ignored") and j.get("status_date") else None,
+                dt.date.fromisoformat(j["status_date"]) if j["status"] in DECIDED and j.get("status_date") else None,
                 j.get("why", ""), (j.get("concerns", "") + (f"\n[Your reason: {j['reason']}]" if j.get("reason") else "")).strip(),
                 j.get("user_notes", ""), "Open CV" if j.get("tailored_cv") else "",
                 "Open letter" if j.get("cover_letter") else "", j["id"]]
@@ -992,7 +1017,8 @@ def excel_write(m: Path, db: dict, st: dict) -> bool:
                         showErrorMessage=True, errorTitle="Status", error="Pick one of: " + ", ".join(STATUSES))
     ws.add_data_validation(dv)
     dv.add(f"E2:E{last}")
-    fills = {"Applied": "C6EFCE", "Ignored": "D9D9D9", "Pending": "FFEB9C", "Low Match": "F2F2F2"}
+    fills = {"Applied": "C6EFCE", "Interviewing": "DDD9F5", "Offer": "A9D08E", "Rejected": "F8CBAD",
+             "Ignored": "D9D9D9", "Pending": "FFEB9C", "Low Match": "F2F2F2"}
     for s, color in fills.items():
         ws.conditional_formatting.add(f"E2:E{last}", CellIsRule(operator="equal", formula=[f'"{s}"'],
                                                                  fill=PatternFill("solid", fgColor=color)))
@@ -1022,7 +1048,8 @@ def excel_write(m: Path, db: dict, st: dict) -> bool:
         "Laika, The Job Retriever - Job Tracker",
         "",
         "Every role Laika has scanned is listed once on the 'Job Tracker' sheet (newest search first).",
-        "Status: Pending = shown to you, waiting for your decision | Applied | Ignored | Low Match = scanned, scored below your threshold.",
+        "Status: Pending = shown to you, waiting for your decision | Applied | Interviewing | Offer | Rejected | Ignored | "
+        "Low Match = scanned, scored below your threshold.",
         "You can change a Status here (drop-down) or type in 'My Notes'. Save and close the file - Laika picks the edits up on its next run.",
         "Tailored CV / Cover Letter link to what Laika made for that role (in 'Tailored CVs' / 'Cover Letters').",
         "Do not edit the 'Job ID' column; Laika uses it to match rows.",
@@ -1644,6 +1671,17 @@ def cmd_letter_build(a):
         sys.exit(code)
 
 
+def cmd_ui(a):
+    m = get_master()
+    sys.dont_write_bytecode = True
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import dashboard  # noqa: E402 - same folder as this script
+    dashboard.serve(m, Path(a.workspace or Path.cwd()), port=a.port, open_browser=not a.no_open,
+                    helper=sys.modules[__name__])
+
+
 def cmd_status(a):
     m = get_master(required=False)
     if not m:
@@ -2122,7 +2160,10 @@ def cmd_register(a):
                "search_date": search_date, "run_id": run["id"], "query": c.get("query", ""),
                "score": score, "why": why, "concerns": concerns, "status": status,
                "status_date": search_date, "reason": "", "user_notes": "",
-               "details": c.get("details") or {}, "excel_status": None}
+               "details": c.get("details") or {}, "excel_status": None,
+               "history": [{"status": status, "date": search_date, "via": "scan"}]}
+        if s and s.get("industry"):
+            job["industry"] = str(s["industry"]).strip()[:60]
         db["jobs"].append(job)
         keys[job["key"]] = job
         fps[job["fingerprint"]] = job
@@ -2205,6 +2246,29 @@ def resolve_refs(text: str, db: dict, st: dict) -> list[dict]:
     return out
 
 
+def record_decisions(m: Path, db: dict, st: dict, pairs: list[tuple[dict, str]], reasons: dict, via: str = "laika"):
+    """Apply status changes and notes, then write cards, Excel, db and state. Shared by `decide` and the dashboard."""
+    changes = []
+    for j, status in pairs:
+        old = j["status"]
+        set_status(j, status, via)
+        if j["id"] in reasons:
+            j["reason"] = reasons.pop(j["id"])
+        changes.append((j, old, status))
+    for jid, text in reasons.items():  # a note without a status change
+        j = find_job(db, jid)
+        if j:
+            j["reason"] = text
+            changes.append((j, j["status"], j["status"]))
+    for j, _, _ in changes:
+        write_card(m, j)
+    st["decisions_since_review"] = st.get("decisions_since_review", 0) + len(changes)
+    excel_ok = excel_write(m, db, st)
+    save_db(m, db)
+    save_state(m, st)
+    return changes, excel_ok
+
+
 def cmd_decide(a):
     m = get_master()
     st, db = load_state(m), load_db(m)
@@ -2216,28 +2280,14 @@ def cmd_decide(a):
         ref, text = r.split("=", 1)
         for j in resolve_refs(ref, db, st):
             reasons[j["id"]] = text.strip()
-    changes = []
-    for status, refs in (("Applied", a.apply), ("Ignored", a.ignore), ("Pending", a.pending)):
-        for j in resolve_refs(refs, db, st):
-            old = j["status"]
-            j["status"] = status
-            j["status_date"] = today_str()
-            j["status_via"] = "laika"
-            if j["id"] in reasons:
-                j["reason"] = reasons.pop(j["id"])
-            changes.append((j, old, status))
-    for jid, text in reasons.items():  # reason given without a status change
-        j = find_job(db, jid)
-        j["reason"] = text
-        changes.append((j, j["status"], j["status"]))
-    if not changes:
-        die("Nothing to do - pass --apply / --ignore / --pending with list numbers or job IDs.")
-    for j, _, _ in changes:
-        write_card(m, j)
-    st["decisions_since_review"] = st.get("decisions_since_review", 0) + len(changes)
-    excel_ok = excel_write(m, db, st)
-    save_db(m, db)
-    save_state(m, st)
+    pairs = []
+    for status, refs in (("Applied", a.apply), ("Ignored", a.ignore), ("Pending", a.pending),
+                         ("Interviewing", a.interviewing), ("Offer", a.offer), ("Rejected", a.rejected)):
+        pairs += [(j, status) for j in resolve_refs(refs, db, st)]
+    if not pairs and not reasons:
+        die("Nothing to do - pass --apply / --ignore / --pending / --interviewing / --offer / --rejected with list "
+            "numbers or job IDs.")
+    changes, excel_ok = record_decisions(m, db, st, pairs, reasons)
     for j, old, new in changes:
         arrow = f"{old} -> {new}" if old != new else f"{new} (note updated)"
         print(f"{j['id']} {j['title']} - {j['company']}: {arrow}" + (f"  [reason: {j['reason']}]" if j.get("reason") else ""))
@@ -2278,7 +2328,7 @@ def cmd_feedback(a):
     m = get_master()
     st, db, crit = load_state(m), load_db(m), read_criteria(m)
     sync(m, db, st)
-    applied = [j for j in db["jobs"] if j["status"] == "Applied"]
+    applied = [j for j in db["jobs"] if j["status"] in APPLIED_STAGES]
     ignored = [j for j in db["jobs"] if j["status"] == "Ignored"]
     pending = [j for j in db["jobs"] if j["status"] == "Pending"]
     threshold = crit_int(crit, "min_relevancy_score")
@@ -2291,6 +2341,12 @@ def cmd_feedback(a):
     print(f"Applied {len(applied)} (avg score {avg(applied)}) | Ignored {len(ignored)} (avg score {avg(ignored)}) | "
           f"Pending {len(pending)} | threshold {threshold}")
     print(f"Decisions since last criteria review: {st.get('decisions_since_review', 0)}")
+    stages = {k: [j for j in applied if j["status"] == k] for k in ("Interviewing", "Offer", "Rejected")}
+    if any(stages.values()):
+        print("Applications that moved on: " + " | ".join(f"{k} {len(v)} (avg score {avg(v)})" for k, v in stages.items()))
+        for k, v in stages.items():
+            for j in v:
+                print(f"  {k}: {j['id']} {j.get('score')} {j['title']} - {j['company']}" + (f" | note: {j['reason']}" if j.get("reason") else ""))
 
     def tok_counts(js):
         cnt: dict = {}
@@ -2313,7 +2369,7 @@ def cmd_feedback(a):
         for j in applied + ignored:
             k = fn(j.get(field) or "-")
             a_i = rows.setdefault(k, [0, 0])
-            a_i[0 if j["status"] == "Applied" else 1] += 1
+            a_i[0 if j["status"] in APPLIED_STAGES else 1] += 1
         return sorted(rows.items(), key=lambda kv: -(kv[1][0] + kv[1][1]))
 
     for field, label, fn in (("company", "Companies", lambda v: v), ("location", "Locations", norm_city),
@@ -2379,10 +2435,12 @@ def cmd_rescore(a):
         for k in ("why", "concerns"):
             if s.get(k) is not None:
                 j[k] = s[k].strip()
+        if s.get("industry"):
+            j["industry"] = str(s["industry"]).strip()[:60]
         if j["status"] in ("Pending", "Low Match"):
-            j["status"] = "Pending" if j["score"] >= threshold else "Low Match"
-            if j["status"] != old_status:
-                j["status_date"] = today_str()
+            new_status = "Pending" if j["score"] >= threshold else "Low Match"
+            if new_status != old_status:
+                set_status(j, new_status, "rescore")
         write_card(m, j)
         changes.append((j, old_score, old_status))
     excel_ok = excel_write(m, db, st)
@@ -2526,6 +2584,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="PDF converter (auto: LibreOffice, else Microsoft Word)")
     s.set_defaults(func=cmd_cv_build)
 
+    s = sub.add_parser("ui", help="Open the Laika dashboard in your browser (runs until you stop it)")
+    s.add_argument("--port", type=int, default=0, help="Port on 127.0.0.1 (default: a free one)")
+    s.add_argument("--no-open", action="store_true", help="Don't open the browser, just print the address")
+    s.set_defaults(func=cmd_ui)
+
     s = sub.add_parser("letter", help="Prepare a cover letter for one role (list number or job ID)")
     s.add_argument("ref")
     s.set_defaults(func=cmd_letter)
@@ -2609,6 +2672,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--apply", default="")
     s.add_argument("--ignore", default="")
     s.add_argument("--pending", default="")
+    s.add_argument("--interviewing", default="", help="Roles where the user was invited to interview")
+    s.add_argument("--offer", default="", help="Roles where the user got an offer")
+    s.add_argument("--rejected", default="", help="Applications the employer turned down")
     s.add_argument("--reason", action="append", help="REF=text (repeatable)")
     s.set_defaults(func=cmd_decide)
 
